@@ -1,4 +1,6 @@
 {
+  "name": "autocurriculo-ai",
+  "regions": ["gru1"],
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
