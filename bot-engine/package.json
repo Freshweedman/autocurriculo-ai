@@ -1,0 +1,14 @@
+{
+  "name": "autocurriculo-bot-engine",
+  "version": "1.0.0",
+  "description": "Bot engine for AutoCurriculo AI - Playwright-based job application automation",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "dependencies": {
+    "playwright": "^1.43.0",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^2.7.0"
+  }
+}

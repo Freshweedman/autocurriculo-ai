@@ -1,0 +1,52 @@
+name: AutoCurriculo AI Bot
+
+on:
+  schedule:
+    - cron: '0 12 * * 1-5'  # Seg-Sex 9h BRT (12h UTC)
+  workflow_dispatch:          # Manual trigger
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install bot dependencies
+        working-directory: bot-engine
+        run: npm install
+
+      - name: Install Playwright browsers
+        working-directory: bot-engine
+        run: npx playwright install chromium --with-deps
+
+      - name: Run bot
+        working-directory: bot-engine
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          BOT_API_KEY: ${{ secrets.BOT_API_KEY }}
+          API_URL: ${{ secrets.API_URL }}
+          INDEED_EMAIL: ${{ secrets.INDEED_EMAIL }}
+          INDEED_SENHA: ${{ secrets.INDEED_SENHA }}
+        run: node bot.js
+
+      - name: Upload logs (always)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-logs
+          path: /tmp/bot-log.txt
+
+      - name: Upload debug screenshots (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: error-screenshots
+          path: /tmp/*.png
