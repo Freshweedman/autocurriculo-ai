@@ -1,0 +1,48 @@
+================================================================
+  AUTOCURRICULO AI - DEPLOY COMPLETO
+================================================================
+
+>>> PASSO 1: GITHUB (criar repo e push)
+ 1. Acesse https://github.com/new
+ 2. Repository name: autocurriculo-ai
+ 3. Marque PUBLIC
+ 4. NAO marque "Add a README"
+ 5. Clique Create repository
+ 6. Copie a URL (ex: https://github.com/USERNAME/autocurriculo-ai.git)
+ 7. Abra o terminal na pasta do projeto e rode:
+    git remote set-url origin (SUA_URL_AQUI)
+    git push -u origin main
+
+>>> PASSO 2: GITHUB SECRETS
+ 1. No repo, va em Settings > Secrets and variables > Actions
+ 2. Veja o arquivo .github/secrets.txt com os valores prontos
+ 3. Adicione os 6 secrets (INDEED_EMAIL e INDEED_SENHA voce preenche)
+ 4. O secret API_URL sera preenchido depois do deploy Vercel
+
+>>> PASSO 3: VERCEL
+ 1. Acesse https://vercel.com/new
+ 2. Importe o repositorio "autocurriculo-ai"
+ 3. Framework: Next.js (detectado automaticamente)
+ 4. Configure as env vars (Dashboard > Settings > Environment Variables):
+    - NEXT_PUBLIC_SUPABASE_URL = https://nbhrtazsgbtfikbyqxth.supabase.co
+    - NEXT_PUBLIC_SUPABASE_ANON_KEY = (copie do .env)
+    - BOT_API_KEY = b_sk_autocurriculo_2024_secret_key_change_me
+ 5. Clique Deploy
+ 6. Aguarde o build (1-2 minutos)
+ 7. Copie a URL gerada (ex: https://autocurriculo-ai.vercel.app)
+
+>>> PASSO 4: ATUALIZAR API_URL
+ 1. Volte no GitHub Secrets
+ 2. Edite o secret API_URL com a URL do Vercel
+
+>>> PASSO 5: TESTAR
+ 1. Abra a URL do Vercel no navegador
+ 2. Crie uma conta (register)
+ 3. Va em Configuracoes > faca upload do curriculo PDF
+ 4. Preencha cargo, cidade, limite diario
+ 5. Ative o bot (toggle ON)
+ 6. Va no GitHub > Actions > Run workflow (manual)
+
+================================================================
+  PRONTO! O bot roda automaticamente Seg-Sex as 9h.
+================================================================
