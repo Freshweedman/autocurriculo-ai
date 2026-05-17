@@ -1,0 +1,31 @@
+name: Post-Deploy Smoke Tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      vercel_url:
+        description: 'Vercel deployment URL'
+        required: true
+        default: 'https://placeholder.vercel.app'
+  workflow_run:
+    workflows: ["AutoCurriculo AI Bot"]
+    types: [completed]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run smoke tests
+        env:
+          VERCEL_URL: ${{ github.event.inputs.vercel_url || 'https://placeholder.vercel.app' }}
+        run: |
+          echo "Running smoke tests against $VERCEL_URL"
+          node tests/smoke.js "$VERCEL_URL"
+
+      - name: Report failure
+        if: failure()
+        run: |
+          echo "Smoke tests failed! Check the Vercel deployment logs."
+          exit 1
