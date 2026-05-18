@@ -25,7 +25,7 @@ export default function LoginPage() {
       }
       router.push("/dashboard");
     } catch {
-      setErro("Erro de conexao. Verifique se as variaveis de ambiente estao configuradas no Vercel.");
+      setErro("Erro de conexao. Confira as env vars NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY no Vercel.");
       setLoading(false);
     }
   };
