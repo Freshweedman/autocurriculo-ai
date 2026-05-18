@@ -239,9 +239,9 @@ export default function ConfiguracoesPage() {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function PlatformCard({
-  platformKey, label, cred, onSave, onRemove, onChange,
+  label, cred, onSave, onRemove, onChange,
 }: {
-  platformKey: string;
+  platformKey?: string;
   label: { nome: string; cor: string; icon: string; googleLogin: boolean };
   cred: PlatformCred;
   onSave: () => void;
