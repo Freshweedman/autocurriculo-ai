@@ -29,13 +29,22 @@ export default function RegisterPage() {
       return;
     }
 
-    // Auto-login if email confirmation is disabled
-    if (data.user?.email_confirmed_at) {
-      await supabase.auth.signInWithPassword({ email, password: senha });
+    // If session exists, user is already logged in (email confirmation disabled)
+    if (data.session) {
       router.push("/dashboard");
       return;
     }
 
+    // Fallback: try to sign in manually (email may already be confirmed)
+    if (data.user?.email_confirmed_at) {
+      const { error: loginError } = await supabase.auth.signInWithPassword({ email, password: senha });
+      if (!loginError) {
+        router.push("/dashboard");
+        return;
+      }
+    }
+
+    // Email confirmation required
     setSucesso(true);
     setLoading(false);
   };
