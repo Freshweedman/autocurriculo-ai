@@ -63,28 +63,28 @@ async function main() {
 
   console.log(`Chrome: ${executablePath}`);
 
-  // Estrategia: usar perfil temporario mas com Chrome real
-  // O Chrome real nao e bloqueado pelo Google OAuth
-  // (diferente do Chromium do Playwright que e detectado)
-  const tempProfile = path.join(os.tmpdir(), "autocurriculo-session-" + Date.now());
-  fs.mkdirSync(tempProfile, { recursive: true });
+  // Usar o perfil REAL do Chrome (ja tem sessao Google salva, evita captcha)
+  // Fecha o Chrome antes de rodar se estiver aberto
+  console.log("\nIMPORTANTE: Feche o Google Chrome antes de continuar.");
+  console.log("Pressione ENTER quando o Chrome estiver fechado...");
+  await new Promise((resolve) => {
+    process.stdin.once("data", resolve);
+  });
 
-  console.log(`Perfil temporario: ${tempProfile}`);
-  console.log("\nABRINDO NAVEGADOR...\n");
+  console.log("\nABRINDO NAVEGADOR COM SEU PERFIL...\n");
 
-  // Usar launchPersistentContext com Chrome real
-  const context = await chromium.launchPersistentContext(tempProfile, {
+  // Usar o perfil real do usuario (tem cookies do Google, evita captcha e bloqueios)
+  const context = await chromium.launchPersistentContext(userDataDir, {
     executablePath,
     headless: false,
     viewport: { width: 1366, height: 768 },
     locale: "pt-BR",
+    channel: "chrome",
     args: [
       "--no-sandbox",
-      "--disable-setuid-sandbox",
-      // NAO incluir --disable-blink-features aqui pois pode causar outros problemas
+      "--profile-directory=Default",
     ],
-    // Remover sinais de automacao
-    ignoreDefaultArgs: ["--enable-automation"],
+    ignoreDefaultArgs: ["--enable-automation", "--enable-blink-features=IdleDetection"],
   });
 
   // Abrir cada site em uma aba
@@ -163,11 +163,6 @@ async function main() {
   console.log(`4. Valor: copie o conteudo do arquivo ${base64File}`);
   console.log("\nOU execute no terminal (precisa do GitHub CLI instalado):");
   console.log(`   gh secret set SESSION_STATE < "${base64File}" -r Freshweedman/autocurriculo-ai`);
-
-  // Limpar perfil temporario
-  try {
-    fs.rmSync(tempProfile, { recursive: true, force: true });
-  } catch (_) {}
 }
 
 main().catch((err) => {
