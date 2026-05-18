@@ -2,7 +2,7 @@
  * AutoCurriculo AI - Bot Engine
  * 
  * Runs via GitHub Actions (not inside Vercel).
- * Orchestrates Playwright to automate job applications on Indeed + generic platforms.
+ * Orchestrates Playwright to automate job applications on Indeed, InfoJobs, LinkedIn + generic platforms.
  * Fetches config from Supabase API, applies, and reports results back.
  */
 
@@ -13,6 +13,8 @@ const fetch = require("node-fetch");
 
 const { log } = require("./utils/logger");
 const { applyIndeed } = require("./platforms/indeed");
+const { applyInfoJobs } = require("./platforms/infojobs");
+const { applyLinkedIn } = require("./platforms/linkedin");
 const { applyGeneric } = require("./platforms/generic");
 const { scrapeGoogleLeads } = require("./scraper-google");
 
@@ -21,8 +23,6 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const BOT_API_KEY = process.env.BOT_API_KEY;
 const API_URL = process.env.API_URL || "http://localhost:3000"; // Your Vercel deployment URL
-
-let curriculoPath = path.join(__dirname, "curriculo.pdf");
 
 async function fetchUserProfiles() {
   // Fetch all active profiles with bot_ativo = true
@@ -103,6 +103,31 @@ async function reportLeads(userId, leads) {
   }
 }
 
+/**
+ * Get platform credentials from environment variables.
+ * Per-user credentials can be added via Supabase in the future.
+ */
+function getPlatformCreds(platform) {
+  switch (platform) {
+    case "indeed":
+      if (process.env.INDEED_EMAIL && process.env.INDEED_SENHA) {
+        return { email: process.env.INDEED_EMAIL, senha: process.env.INDEED_SENHA };
+      }
+      break;
+    case "infojobs":
+      if (process.env.INFOJOBS_EMAIL && process.env.INFOJOBS_SENHA) {
+        return { email: process.env.INFOJOBS_EMAIL, senha: process.env.INFOJOBS_SENHA };
+      }
+      break;
+    case "linkedin":
+      if (process.env.LINKEDIN_EMAIL && process.env.LINKEDIN_SENHA) {
+        return { email: process.env.LINKEDIN_EMAIL, senha: process.env.LINKEDIN_SENHA };
+      }
+      break;
+  }
+  return null;
+}
+
 async function main() {
   log("[BOT] AutoCurriculo AI iniciando...");
   log(`[BOT] Data/Hora: ${new Date().toISOString()}`);
@@ -121,10 +146,16 @@ async function main() {
     return;
   }
 
+  // Show which platforms are configured
+  const indeedCreds = getPlatformCreds("indeed");
+  const infojobsCreds = getPlatformCreds("infojobs");
+  const linkedinCreds = getPlatformCreds("linkedin");
+  log(`[BOT] Plataformas: ${[indeedCreds && "Indeed", infojobsCreds && "InfoJobs", linkedinCreds && "LinkedIn"].filter(Boolean).join(", ") || "nenhuma"}`);
+
   // Launch browser once
   const browser = await chromium.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
   });
 
   try {
@@ -132,7 +163,7 @@ async function main() {
       const userId = profile.user_id;
       const cargo = profile.cargo || "gestor de trafego";
       const cidade = profile.cidade || "";
-      const limiteDiario = profile.limite_diario || 5;
+      const limiteDiario = profile.limite_diario || 100;
 
       log(`[BOT] Processando user ${userId}: cargo="${cargo}", limite=${limiteDiario}`);
 
@@ -146,27 +177,62 @@ async function main() {
       const allResults = [];
 
       // --- Indeed ---
-      const indeedCreds = getPlatformCreds(userId, "indeed");
       if (indeedCreds) {
         log("[BOT] Executando Indeed...");
         const indeedResults = await applyIndeed(browser, {
-          ...indeedCreds,
+          email: indeedCreds.email,
+          senha: indeedCreds.senha,
           cargo,
           cidade,
           curriculoPath: cvPath,
           limiteDiario,
         });
         allResults.push(...indeedResults);
+        log(`[BOT] Indeed: ${indeedResults.length} resultados`);
       }
 
-      // --- Generic platforms (Trabalhe Conosco URLs from DB or config) ---
-      const genericUrls = []; // Can be extended with actual URLs from DB
+      // --- InfoJobs ---
+      if (infojobsCreds) {
+        log("[BOT] Executando InfoJobs...");
+        const infojobsResults = await applyInfoJobs(browser, {
+          email: infojobsCreds.email,
+          senha: infojobsCreds.senha,
+          cargo,
+          cidade,
+          curriculoPath: cvPath,
+          limiteDiario,
+        });
+        allResults.push(...infojobsResults);
+        log(`[BOT] InfoJobs: ${infojobsResults.length} resultados`);
+      }
+
+      // --- LinkedIn ---
+      if (linkedinCreds) {
+        log("[BOT] Executando LinkedIn...");
+        const linkedinResults = await applyLinkedIn(browser, {
+          email: linkedinCreds.email,
+          senha: linkedinCreds.senha,
+          cargo,
+          cidade,
+          curriculoPath: cvPath,
+          limiteDiario,
+        });
+        allResults.push(...linkedinResults);
+        log(`[BOT] LinkedIn: ${linkedinResults.length} resultados`);
+      }
+
+      // --- Generic platforms (Trabalhe Conosco URLs) ---
+      // Generic URLs can be added per-user via Supabase or env var
+      const genericUrls = process.env.GENERIC_URLS
+        ? process.env.GENERIC_URLS.split(",").map((u) => u.trim()).filter(Boolean)
+        : [];
+
       if (genericUrls.length > 0) {
         log("[BOT] Executando plataformas genericas...");
         const genericResults = await applyGeneric(browser, {
           curriculoPath: cvPath,
           plataforma: "Generico",
-          urls: genericUrls.slice(0, limiteDiario),
+          urls: genericUrls.slice(0, Math.min(limiteDiario, 50)),
         });
         allResults.push(...genericResults);
       }
@@ -183,7 +249,8 @@ async function main() {
         await reportResults(userId, allResults);
       }
 
-      log(`[BOT] User ${userId}: ${allResults.length} candidaturas processadas, ${leads.length} leads`);
+      const enviados = allResults.filter((r) => r.status === "enviado").length;
+      log(`[BOT] User ${userId}: ${enviados} enviadas / ${allResults.length} processadas, ${leads.length} leads`);
     }
 
   } catch (err) {
@@ -192,17 +259,6 @@ async function main() {
     await browser.close();
     log("[BOT] Browser fechado. Finalizado.");
   }
-}
-
-function getPlatformCreds(userId, platform) {
-  // In production, fetch credentials from a secure storage (Supabase vault or encrypted field)
-  // For now, use environment variables per platform
-  if (platform === "indeed") {
-    const email = process.env.INDEED_EMAIL;
-    const senha = process.env.INDEED_SENHA;
-    if (email && senha) return { email, senha };
-  }
-  return null;
 }
 
 main();

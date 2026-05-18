@@ -8,6 +8,7 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    timeout-minutes: 60       # Allow up to 60 min for 100+ applications
 
     steps:
       - name: Checkout repository
@@ -35,6 +36,10 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           INDEED_EMAIL: ${{ secrets.INDEED_EMAIL }}
           INDEED_SENHA: ${{ secrets.INDEED_SENHA }}
+          INFOJOBS_EMAIL: ${{ secrets.INFOJOBS_EMAIL }}
+          INFOJOBS_SENHA: ${{ secrets.INFOJOBS_SENHA }}
+          LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
+          LINKEDIN_SENHA: ${{ secrets.LINKEDIN_SENHA }}
         run: node bot.js
 
       - name: Upload logs (always)

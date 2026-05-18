@@ -9,6 +9,12 @@
   "env": {
     "NEXT_PUBLIC_SUPABASE_URL": "https://nbhrtazsgbtfikbyqxth.supabase.co",
     "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iaHJ0YXpzZ2J0ZmlrYnlxeHRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkwNDA1OTcsImV4cCI6MjA5NDYxNjU5N30.gmLkvZPe6lcnqFgCZYP-j_HsFuv5x1GEKPw6a6fVqcU",
-    "BOT_API_KEY": "b_sk_autocurriculo_2024_secret_key_change_me"
+    "BOT_API_KEY": "b_sk_autocurriculo_2024_secret_key_change_me",
+    "INDEED_EMAIL": "",
+    "INDEED_SENHA": "",
+    "INFOJOBS_EMAIL": "",
+    "INFOJOBS_SENHA": "",
+    "LINKEDIN_EMAIL": "",
+    "LINKEDIN_SENHA": ""
   }
 }

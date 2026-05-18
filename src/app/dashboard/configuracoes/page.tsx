@@ -146,7 +146,7 @@ export default function ConfiguracoesPage() {
             onChange={(e) => setLimiteDiario(Number(e.target.value))}
             style={{ marginBottom: 16 }}
           >
-            {[5, 10, 20, 30, 50].map((n) => (
+            {[10, 20, 50, 100, 150, 200].map((n) => (
               <option key={n} value={n}>{n} curriculos/dia</option>
             ))}
           </select>

@@ -1,12 +1,12 @@
-const { randomDelay } = require("../utils/delays");
+const { randomDelay, humanType } = require("../utils/delays");
 const { log } = require("../utils/logger");
 
 /**
  * Generic bot for platforms like InfoJobs, Abler, Kenoby, "Trabalhe Conosco" pages.
- * Strategy: search URLs from a list, detect file inputs, auto-attach resume.
+ * Strategy: login if credentials provided, detect file inputs, auto-attach resume.
  */
 async function applyGeneric(browser, config) {
-  const { curriculoPath, plataforma, urls } = config;
+  const { curriculoPath, plataforma, urls, email, senha } = config;
   const results = [];
 
   for (const url of urls) {
@@ -18,7 +18,41 @@ async function applyGeneric(browser, config) {
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30000 });
       await randomDelay(2000, 4000);
 
-      // Detect file inputs
+      // Try login if credentials provided and login form detected
+      if (email && senha) {
+        const loginFields = await page.$$('input[type="email"], input[name*="email"], input[id*="email"], input[name*="login"], input[id*="login"]');
+        const passFields = await page.$$('input[type="password"]');
+
+        if (loginFields.length > 0 && passFields.length > 0) {
+          log(`[${plataforma}] Detectado formulario de login - autenticando...`);
+
+          for (const field of loginFields) {
+            try {
+              await field.click();
+              await humanType(page, field, email);
+              break;
+            } catch (_) { /* try next field */ }
+          }
+
+          for (const field of passFields) {
+            try {
+              await field.click();
+              await humanType(page, field, senha);
+              break;
+            } catch (_) { /* try next field */ }
+          }
+
+          // Submit login
+          const submitBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login"), button:has-text("Acessar")');
+          if (submitBtn) {
+            await submitBtn.click();
+            await randomDelay(3000, 6000);
+            log(`[${plataforma}] Login efetuado`);
+          }
+        }
+      }
+
+      // Detect file inputs for resume upload
       const fileInputs = await page.$$('input[type="file"]');
       if (fileInputs.length > 0) {
         for (const input of fileInputs) {
@@ -29,11 +63,12 @@ async function applyGeneric(browser, config) {
 
             // Try to submit after upload
             const submitBtn = await page.$(
-              'button[type="submit"], input[type="submit"], button:has-text("Enviar"), button:has-text("Candidatar"), button:has-text("Apply")'
+              'button[type="submit"], input[type="submit"], button:has-text("Enviar"), button:has-text("Candidatar"), button:has-text("Apply"), button:has-text("Confirmar")'
             );
             if (submitBtn) {
               await submitBtn.click();
               await randomDelay(2000, 3000);
+              log(`[${plataforma}] Formulario enviado`);
             }
           } catch (inputErr) {
             log(`[${plataforma}] Erro upload: ${inputErr.message}`);

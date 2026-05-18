@@ -40,55 +40,94 @@ async function applyIndeed(browser, config) {
 
     log("[INDEED] Resultados carregados");
 
-    // Find job cards
-    const jobCards = await page.$$('[data-jk]');
-    log(`[INDEED] Encontrados ${jobCards.length} cards de vaga`);
+    // Multi-page loop to hit the daily limit
+    const maxTarget = limiteDiario || 100;
+    let applied = 0;
+    let pageNum = 1;
 
-    const maxToApply = Math.min(limiteDiario || 5, jobCards.length);
+    while (applied < maxTarget && pageNum <= 20) {
+      log(`[INDEED] Processando pagina ${pageNum}...`);
 
-    for (let i = 0; i < maxToApply; i++) {
-      try {
-        const card = jobCards[i];
-        await card.click();
-        await randomDelay(2000, 4000);
+      // Find job cards on current page
+      const jobCards = await page.$$('[data-jk]');
+      log(`[INDEED] ${jobCards.length} cards na pagina ${pageNum}`);
 
-        // Look for "Candidatura simplificada" button
-        const easyApplyBtn = await page.$(
-          'button:has-text("Candidatura simplificada"), span:has-text("Candidatura simplificada"), button:has-text("Aplicar facil")'
-        );
+      if (jobCards.length === 0) {
+        log("[INDEED] Nenhum card encontrado. Fim dos resultados.");
+        break;
+      }
 
-        if (easyApplyBtn) {
-          await easyApplyBtn.click();
+      for (let i = 0; i < jobCards.length && applied < maxTarget; i++) {
+        try {
+          // Re-query cards each time since DOM may change after clicks
+          const currentCards = await page.$$('[data-jk]');
+          if (i >= currentCards.length) break;
+          const card = currentCards[i];
+
+          await card.click();
           await randomDelay(2000, 4000);
 
-          // Upload resume
-          const fileInput = await page.$('input[type="file"]');
-          if (fileInput) {
-            await fileInput.setInputFiles(curriculoPath);
-            log(`[INDEED] Curriculo anexado vaga ${i + 1}`);
-            await randomDelay(1000, 2000);
+          // Look for "Candidatura simplificada" / "Easy Apply" button
+          const easyApplyBtn = await page.$(
+            'button:has-text("Candidatura simplificada"), span:has-text("Candidatura simplificada"), button:has-text("Aplicar facil"), button:has-text("Easy Apply")'
+          );
 
-            // Submit
-            const submitBtn = await page.$(
-              'button:has-text("Enviar"), button:has-text("Concluir"), button:has-text("Finalizar")'
-            );
-            if (submitBtn) {
-              await submitBtn.click();
-              log(`[OK] Indeed vaga ${i + 1} enviada`);
-              results.push({ empresa: "Indeed", vaga: `vaga-${i + 1}`, plataforma: "Indeed", status: "enviado" });
+          if (easyApplyBtn) {
+            await easyApplyBtn.click();
+            await randomDelay(2000, 4000);
+
+            // Upload resume
+            const fileInput = await page.$('input[type="file"]');
+            if (fileInput) {
+              await fileInput.setInputFiles(curriculoPath);
+              log(`[INDEED] Curriculo anexado - vaga #${applied + 1}`);
+              await randomDelay(1000, 2000);
+
+              // Submit application
+              const submitBtn = await page.$(
+                'button:has-text("Enviar"), button:has-text("Concluir"), button:has-text("Finalizar"), button:has-text("Submit"), button:has-text("Apply")'
+              );
+              if (submitBtn) {
+                await submitBtn.click();
+                applied++;
+                log(`[OK] Indeed vaga #${applied} enviada`);
+                results.push({ empresa: "Indeed", vaga: `vaga-p${pageNum}-${i}`, plataforma: "Indeed", status: "enviado" });
+              } else {
+                // Try closing the easy apply modal and continuing
+                const closeBtn = await page.$('button[aria-label="Fechar"], button[aria-label="Close"]');
+                if (closeBtn) await closeBtn.click();
+                results.push({ empresa: "Indeed", vaga: `vaga-p${pageNum}-${i}`, plataforma: "Indeed", status: "nao_suportado" });
+              }
+            } else {
+              results.push({ empresa: "Indeed", vaga: `vaga-p${pageNum}-${i}`, plataforma: "Indeed", status: "sem_file_input" });
             }
+          } else {
+            results.push({ empresa: "Indeed", vaga: `vaga-p${pageNum}-${i}`, plataforma: "Indeed", status: "nao_suportado" });
           }
-        } else {
-          log(`[INDEED] Vaga ${i + 1} nao tem candidatura simplificada`);
-          results.push({ empresa: "Indeed", vaga: `vaga-${i + 1}`, plataforma: "Indeed", status: "nao_suportado" });
-        }
 
-        await randomDelay(2000, 4000);
-      } catch (cardErr) {
-        log(`[ERRO] Indeed vaga ${i + 1}: ${cardErr.message}`);
-        results.push({ empresa: "Indeed", vaga: `vaga-${i + 1}`, plataforma: "Indeed", status: "falhou" });
+          await randomDelay(2000, 4000);
+        } catch (cardErr) {
+          log(`[ERRO] Indeed vaga ${i + 1} (pag ${pageNum}): ${cardErr.message}`);
+          results.push({ empresa: "Indeed", vaga: `vaga-p${pageNum}-${i}`, plataforma: "Indeed", status: "falhou" });
+        }
+      }
+
+      // Try to go to next page
+      if (applied < maxTarget) {
+        const nextBtn = await page.$('a[data-testid="pagination-page-next"], a[aria-label="Proxima"], a[aria-label="Next"]');
+        if (nextBtn) {
+          await nextBtn.click();
+          await page.waitForURL("**/jobs**", { timeout: 10000 }).catch(() => {});
+          await randomDelay(3000, 5000);
+          pageNum++;
+        } else {
+          log("[INDEED] Nao ha mais paginas.");
+          break;
+        }
       }
     }
+
+    log(`[INDEED] Finalizado: ${applied} candidaturas enviadas de ${maxTarget} desejadas`);
 
   } catch (err) {
     log(`[ERRO CRITICO] Indeed: ${err.message}`);
