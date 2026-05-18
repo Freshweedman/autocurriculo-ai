@@ -1,11 +1,14 @@
 /**
- * AutoCurriculo AI - Bot Engine v2
- * 
- * Supports 2 auth modes:
- *   MODE 1: SESSION_STATE (manual Google OAuth once, then auto)
- *   MODE 2: email+senha env vars (traditional login, fallback)
- * 
- * Runs via GitHub Actions. Orchestrates Playwright across 7 platforms.
+ * AutoCurriculo AI - Bot Engine v3
+ *
+ * Plataformas CLT: Indeed, LinkedIn, InfoJobs, Catho, TrabalhaBrasil, Vagas.com, EmpregoLigado, Sine, TrabalheConosco
+ * Plataformas Freelancer: Workana, GetNinjas, 99Freelas
+ * Leads: Google Search + Google Maps + queries freelancer
+ *
+ * Auth modes:
+ *   MODE 1: SESSION_STATE (Google OAuth salvo, preferido)
+ *   MODE 2: credenciais por usuario no banco Supabase (configuradas no dashboard)
+ *   MODE 3: env vars (fallback admin)
  */
 
 const { chromium } = require("playwright");
@@ -15,13 +18,25 @@ const zlib = require("zlib");
 const fetch = require("node-fetch");
 
 const { log } = require("./utils/logger");
-const { applyIndeed } = require("./platforms/indeed");
-const { applyInfoJobs } = require("./platforms/infojobs");
-const { applyLinkedIn } = require("./platforms/linkedin");
-const { applyTrabalhaBrasil } = require("./platforms/trabalhabrasil");
-const { applyVagas } = require("./platforms/vagas");
-const { applyGeneric } = require("./platforms/generic");
-const { discoverCareerPages } = require("./platforms/discoverer");
+
+// Plataformas CLT
+const { applyIndeed }        = require("./platforms/indeed");
+const { applyInfoJobs }      = require("./platforms/infojobs");
+const { applyLinkedIn }      = require("./platforms/linkedin");
+const { applyCatho }         = require("./platforms/catho");
+const { applyTrabalhaBrasil }= require("./platforms/trabalhabrasil");
+const { applyVagas }         = require("./platforms/vagas");
+const { applyEmpregoLigado } = require("./platforms/empregoligado");
+const { applySine }          = require("./platforms/sine");
+const { applyGeneric }       = require("./platforms/generic");
+const { discoverCareerPages }= require("./platforms/discoverer");
+
+// Plataformas Freelancer
+const { applyWorkana }   = require("./platforms/workana");
+const { applyGetNinjas } = require("./platforms/getninjas");
+const { apply99Freelas } = require("./platforms/99freelas");
+
+// Leads
 const { scrapeGoogleLeads } = require("./scraper-google");
 
 // Config from environment
@@ -154,6 +169,36 @@ function getPlatformCreds(platform, profile) {
       if (process.env.LINKEDIN_EMAIL && process.env.LINKEDIN_SENHA)
         return { email: process.env.LINKEDIN_EMAIL, senha: process.env.LINKEDIN_SENHA };
       break;
+    case "catho":
+      if (profile.catho_email && profile.catho_senha)
+        return { email: profile.catho_email, senha: profile.catho_senha };
+      if (process.env.CATHO_EMAIL && process.env.CATHO_SENHA)
+        return { email: process.env.CATHO_EMAIL, senha: process.env.CATHO_SENHA };
+      break;
+    case "sine":
+      if (profile.sine_email && profile.sine_senha)
+        return { email: profile.sine_email, senha: profile.sine_senha };
+      if (process.env.SINE_EMAIL && process.env.SINE_SENHA)
+        return { email: process.env.SINE_EMAIL, senha: process.env.SINE_SENHA };
+      break;
+    case "workana":
+      if (profile.workana_email && profile.workana_senha)
+        return { email: profile.workana_email, senha: profile.workana_senha };
+      if (process.env.WORKANA_EMAIL && process.env.WORKANA_SENHA)
+        return { email: process.env.WORKANA_EMAIL, senha: process.env.WORKANA_SENHA };
+      break;
+    case "getninjas":
+      if (profile.getninjas_email && profile.getninjas_senha)
+        return { email: profile.getninjas_email, senha: profile.getninjas_senha };
+      if (process.env.GETNINJAS_EMAIL && process.env.GETNINJAS_SENHA)
+        return { email: process.env.GETNINJAS_EMAIL, senha: process.env.GETNINJAS_SENHA };
+      break;
+    case "99freelas":
+      if (profile.freelas99_email && profile.freelas99_senha)
+        return { email: profile.freelas99_email, senha: profile.freelas99_senha };
+      if (process.env.FREELAS99_EMAIL && process.env.FREELAS99_SENHA)
+        return { email: process.env.FREELAS99_EMAIL, senha: process.env.FREELAS99_SENHA };
+      break;
   }
   return null;
 }
@@ -215,14 +260,24 @@ async function main() {
       log(`[BOT] User ${userId}: cargo="${cargo}", limite=${limiteDiario}`);
 
       // Resolve credentials per-profile (from DB or env fallback)
-      const profileIndeedCreds   = hasSession ? { session: true } : getPlatformCreds("indeed",   profile);
-      const profileLinkedinCreds = hasSession ? { session: true } : getPlatformCreds("linkedin", profile);
-      const profileInfojobsCreds = hasSession ? { session: true } : getPlatformCreds("infojobs", profile);
+      const profileIndeedCreds   = hasSession ? { session: true } : getPlatformCreds("indeed",    profile);
+      const profileLinkedinCreds = hasSession ? { session: true } : getPlatformCreds("linkedin",  profile);
+      const profileInfojobsCreds = hasSession ? { session: true } : getPlatformCreds("infojobs",  profile);
+      const profileCathoCreds    = hasSession ? { session: true } : getPlatformCreds("catho",     profile);
+      const profileSineCreds     =                                   getPlatformCreds("sine",      profile);
+      const profileWorkanaCreds  =                                   getPlatformCreds("workana",   profile);
+      const profileNinjasCreds   =                                   getPlatformCreds("getninjas", profile);
+      const profileFreelas99Creds=                                   getPlatformCreds("99freelas", profile);
 
       log(`[BOT] Plataformas com login: ${[
         profileIndeedCreds   && "Indeed",
         profileLinkedinCreds && "LinkedIn",
         profileInfojobsCreds && "InfoJobs",
+        profileCathoCreds    && "Catho",
+        profileSineCreds     && "Sine",
+        profileWorkanaCreds  && "Workana",
+        profileNinjasCreds   && "GetNinjas",
+        profileFreelas99Creds&& "99Freelas",
       ].filter(Boolean).join(", ") || "nenhuma (so plataformas sem login)"}`);
 
       const cvPath = await downloadCurriculo(userId);
@@ -233,47 +288,74 @@ async function main() {
 
       const allResults = [];
 
-      // === PLATAFORMAS COM LOGIN (usam authContext com sessao) ===
+      // ── PLATAFORMAS CLT COM LOGIN ──────────────────────────────────────────
 
       if (profileIndeedCreds) {
         log("[BOT] Indeed...");
-        const results = await applyIndeed(browser, authContext, {
+        const r = await applyIndeed(browser, authContext, {
           ...(profileIndeedCreds.session ? { session: true } : { email: profileIndeedCreds.email, senha: profileIndeedCreds.senha }),
           cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
-        allResults.push(...results);
-        log(`[BOT] Indeed: ${results.length} resultados`);
+        allResults.push(...r);
+        log(`[BOT] Indeed: ${r.length} resultados`);
       }
 
       if (profileInfojobsCreds) {
         log("[BOT] InfoJobs...");
-        const results = await applyInfoJobs(browser, authContext, {
+        const r = await applyInfoJobs(browser, authContext, {
           ...(profileInfojobsCreds.session ? { session: true } : { email: profileInfojobsCreds.email, senha: profileInfojobsCreds.senha }),
           cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
-        allResults.push(...results);
-        log(`[BOT] InfoJobs: ${results.length} resultados`);
+        allResults.push(...r);
+        log(`[BOT] InfoJobs: ${r.length} resultados`);
       }
 
       if (profileLinkedinCreds) {
         log("[BOT] LinkedIn...");
-        const results = await applyLinkedIn(browser, authContext, {
+        const r = await applyLinkedIn(browser, authContext, {
           ...(profileLinkedinCreds.session ? { session: true } : { email: profileLinkedinCreds.email, senha: profileLinkedinCreds.senha }),
           cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
-        allResults.push(...results);
-        log(`[BOT] LinkedIn: ${results.length} resultados`);
+        allResults.push(...r);
+        log(`[BOT] LinkedIn: ${r.length} resultados`);
       }
 
-      // === PLATAFORMAS SEM LOGIN ===
+      if (profileCathoCreds) {
+        log("[BOT] Catho...");
+        const r = await applyCatho(browser, authContext, {
+          ...(profileCathoCreds.session ? { session: true } : { email: profileCathoCreds.email, senha: profileCathoCreds.senha }),
+          cargo, cidade, curriculoPath: cvPath, limiteDiario,
+        });
+        allResults.push(...r);
+        log(`[BOT] Catho: ${r.length} resultados`);
+      }
 
-      log("[BOT] Trabalha Brasil...");
+      if (profileSineCreds) {
+        log("[BOT] Sine...");
+        const r = await applySine(browser, null, {
+          email: profileSineCreds.email, senha: profileSineCreds.senha,
+          cargo, cidade, curriculoPath: cvPath, limiteDiario,
+        });
+        allResults.push(...r);
+        log(`[BOT] Sine: ${r.length} resultados`);
+      }
+
+      // ── PLATAFORMAS CLT SEM LOGIN ──────────────────────────────────────────
+
+      log("[BOT] TrabalhaBrasil...");
       const tbResults = await applyTrabalhaBrasil(browser, { cargo, cidade, curriculoPath: cvPath, limiteDiario });
       allResults.push(...tbResults);
+      log(`[BOT] TrabalhaBrasil: ${tbResults.length} resultados`);
 
       log("[BOT] Vagas.com...");
       const vagasResults = await applyVagas(browser, { cargo, cidade, curriculoPath: cvPath, limiteDiario });
       allResults.push(...vagasResults);
+      log(`[BOT] Vagas.com: ${vagasResults.length} resultados`);
+
+      log("[BOT] EmpregoLigado...");
+      const elResults = await applyEmpregoLigado(browser, { cargo, cidade, curriculoPath: cvPath, limiteDiario });
+      allResults.push(...elResults);
+      log(`[BOT] EmpregoLigado: ${elResults.length} resultados`);
 
       log("[BOT] Descobrindo Trabalhe Conosco...");
       const discoveredUrls = await discoverCareerPages(browser, { cargo, cidade });
@@ -281,9 +363,42 @@ async function main() {
         const genericResults = await applyGeneric(browser, {
           curriculoPath: cvPath,
           plataforma: "TrabalheConosco",
-          urls: discoveredUrls.slice(0, limiteDiario),
+          urls: discoveredUrls.slice(0, Math.min(limiteDiario, 20)),
         });
         allResults.push(...genericResults);
+        log(`[BOT] TrabalheConosco: ${genericResults.length} resultados`);
+      }
+
+      // ── PLATAFORMAS FREELANCER ─────────────────────────────────────────────
+
+      if (profileWorkanaCreds) {
+        log("[BOT] Workana...");
+        const r = await applyWorkana(browser, null, {
+          email: profileWorkanaCreds.email, senha: profileWorkanaCreds.senha,
+          cargo, curriculoPath: cvPath, limiteDiario,
+        });
+        allResults.push(...r);
+        log(`[BOT] Workana: ${r.length} resultados`);
+      }
+
+      if (profileNinjasCreds) {
+        log("[BOT] GetNinjas...");
+        const r = await applyGetNinjas(browser, null, {
+          email: profileNinjasCreds.email, senha: profileNinjasCreds.senha,
+          cargo, cidade, limiteDiario,
+        });
+        allResults.push(...r);
+        log(`[BOT] GetNinjas: ${r.length} resultados`);
+      }
+
+      if (profileFreelas99Creds) {
+        log("[BOT] 99Freelas...");
+        const r = await apply99Freelas(browser, null, {
+          email: profileFreelas99Creds.email, senha: profileFreelas99Creds.senha,
+          cargo, limiteDiario,
+        });
+        allResults.push(...r);
+        log(`[BOT] 99Freelas: ${r.length} resultados`);
       }
 
       // --- Google Leads ---
