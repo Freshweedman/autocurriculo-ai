@@ -1,9 +1,11 @@
 "use client";
 
 import { supabase } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,7 +17,7 @@ export default function RegisterPage() {
     setLoading(true);
     setErro("");
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password: senha,
       options: { emailRedirectTo: `${window.location.origin}/dashboard` },
@@ -24,6 +26,13 @@ export default function RegisterPage() {
     if (error) {
       setErro(error.message);
       setLoading(false);
+      return;
+    }
+
+    // Auto-login if email confirmation is disabled
+    if (data.user?.email_confirmed_at) {
+      await supabase.auth.signInWithPassword({ email, password: senha });
+      router.push("/dashboard");
       return;
     }
 

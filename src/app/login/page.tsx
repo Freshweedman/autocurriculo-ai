@@ -16,13 +16,18 @@ export default function LoginPage() {
     setLoading(true);
     setErro("");
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-    if (error) {
-      setErro(error.message);
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
+      if (error) {
+        setErro(error.message);
+        setLoading(false);
+        return;
+      }
+      router.push("/dashboard");
+    } catch (err: any) {
+      setErro("Erro de conexao. Verifique se as variaveis de ambiente estao configuradas no Vercel.");
       setLoading(false);
-      return;
     }
-    router.push("/dashboard");
   };
 
   return (
