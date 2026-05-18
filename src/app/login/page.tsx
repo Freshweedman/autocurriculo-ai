@@ -24,7 +24,7 @@ export default function LoginPage() {
         return;
       }
       router.push("/dashboard");
-    } catch (err: any) {
+    } catch {
       setErro("Erro de conexao. Verifique se as variaveis de ambiente estao configuradas no Vercel.");
       setLoading(false);
     }
