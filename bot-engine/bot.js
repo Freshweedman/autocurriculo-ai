@@ -15,7 +15,10 @@ const { log } = require("./utils/logger");
 const { applyIndeed } = require("./platforms/indeed");
 const { applyInfoJobs } = require("./platforms/infojobs");
 const { applyLinkedIn } = require("./platforms/linkedin");
+const { applyTrabalhaBrasil } = require("./platforms/trabalhabrasil");
+const { applyVagas } = require("./platforms/vagas");
 const { applyGeneric } = require("./platforms/generic");
+const { discoverCareerPages } = require("./platforms/discoverer");
 const { scrapeGoogleLeads } = require("./scraper-google");
 
 // Config from environment
@@ -150,7 +153,8 @@ async function main() {
   const indeedCreds = getPlatformCreds("indeed");
   const infojobsCreds = getPlatformCreds("infojobs");
   const linkedinCreds = getPlatformCreds("linkedin");
-  log(`[BOT] Plataformas: ${[indeedCreds && "Indeed", infojobsCreds && "InfoJobs", linkedinCreds && "LinkedIn"].filter(Boolean).join(", ") || "nenhuma"}`);
+  log(`[BOT] Com login: ${[indeedCreds && "Indeed", infojobsCreds && "InfoJobs", linkedinCreds && "LinkedIn"].filter(Boolean).join(", ") || "nenhuma"}`);
+  log(`[BOT] Sem login (auto): TrabalhaBrasil, Vagas.com, +TrabalheConosco`);
 
   // Launch browser once
   const browser = await chromium.launch({
@@ -175,6 +179,8 @@ async function main() {
       }
 
       const allResults = [];
+
+      // === PLATAFORMAS COM LOGIN ===
 
       // --- Indeed ---
       if (indeedCreds) {
@@ -221,20 +227,42 @@ async function main() {
         log(`[BOT] LinkedIn: ${linkedinResults.length} resultados`);
       }
 
-      // --- Generic platforms (Trabalhe Conosco URLs) ---
-      // Generic URLs can be added per-user via Supabase or env var
-      const genericUrls = process.env.GENERIC_URLS
-        ? process.env.GENERIC_URLS.split(",").map((u) => u.trim()).filter(Boolean)
-        : [];
+      // === PLATAFORMAS SEM LOGIN (DIRECT UPLOAD) ===
 
-      if (genericUrls.length > 0) {
-        log("[BOT] Executando plataformas genericas...");
+      // --- Trabalha Brasil (no login needed) ---
+      log("[BOT] Executando Trabalha Brasil...");
+      const tbResults = await applyTrabalhaBrasil(browser, {
+        cargo,
+        cidade,
+        curriculoPath: cvPath,
+        limiteDiario,
+      });
+      allResults.push(...tbResults);
+      log(`[BOT] Trabalha Brasil: ${tbResults.length} resultados`);
+
+      // --- Vagas.com (no login needed) ---
+      log("[BOT] Executando Vagas.com...");
+      const vagasResults = await applyVagas(browser, {
+        cargo,
+        cidade,
+        curriculoPath: cvPath,
+        limiteDiario,
+      });
+      allResults.push(...vagasResults);
+      log(`[BOT] Vagas.com: ${vagasResults.length} resultados`);
+
+      // --- Descobridor Trabalhe Conosco + Bot Generico ---
+      log("[BOT] Descobrindo paginas Trabalhe Conosco...");
+      const discoveredUrls = await discoverCareerPages(browser, { cargo, cidade });
+      if (discoveredUrls.length > 0) {
+        log(`[BOT] Aplicando para ${Math.min(discoveredUrls.length, limiteDiario)} URLs descobertas...`);
         const genericResults = await applyGeneric(browser, {
           curriculoPath: cvPath,
-          plataforma: "Generico",
-          urls: genericUrls.slice(0, Math.min(limiteDiario, 50)),
+          plataforma: "TrabalheConosco",
+          urls: discoveredUrls.slice(0, limiteDiario),
         });
         allResults.push(...genericResults);
+        log(`[BOT] Trabalhe Conosco: ${genericResults.length} resultados`);
       }
 
       // --- Google Leads Scraper ---
