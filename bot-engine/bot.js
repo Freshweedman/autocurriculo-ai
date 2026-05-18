@@ -1,14 +1,17 @@
 /**
- * AutoCurriculo AI - Bot Engine
+ * AutoCurriculo AI - Bot Engine v2
  * 
- * Runs via GitHub Actions (not inside Vercel).
- * Orchestrates Playwright to automate job applications on Indeed, InfoJobs, LinkedIn + generic platforms.
- * Fetches config from Supabase API, applies, and reports results back.
+ * Supports 2 auth modes:
+ *   MODE 1: SESSION_STATE (manual Google OAuth once, then auto)
+ *   MODE 2: email+senha env vars (traditional login, fallback)
+ * 
+ * Runs via GitHub Actions. Orchestrates Playwright across 7 platforms.
  */
 
 const { chromium } = require("playwright");
 const path = require("path");
 const fs = require("fs");
+const zlib = require("zlib");
 const fetch = require("node-fetch");
 
 const { log } = require("./utils/logger");
@@ -25,10 +28,32 @@ const { scrapeGoogleLeads } = require("./scraper-google");
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const BOT_API_KEY = process.env.BOT_API_KEY;
-const API_URL = process.env.API_URL || "http://localhost:3000"; // Your Vercel deployment URL
+const API_URL = process.env.API_URL || "http://localhost:3000";
+
+/**
+ * Load saved browser session from SESSION_STATE env var.
+ * If present, browser starts already logged into Indeed/LinkedIn/InfoJobs.
+ */
+function loadSessionState() {
+  const encoded = process.env.SESSION_STATE;
+  if (!encoded) {
+    log("[SESSION] SESSION_STATE nao configurado. Usando login email/senha.");
+    return null;
+  }
+  
+  try {
+    const compressed = Buffer.from(encoded, "base64");
+    const json = zlib.gunzipSync(compressed).toString("utf8");
+    const state = JSON.parse(json);
+    log(`[SESSION] Sessao carregada: ${state.cookies?.length || 0} cookies, ${Object.keys(state.origins || {}).length} origins`);
+    return state;
+  } catch (err) {
+    log(`[SESSION] Erro ao carregar sessao: ${err.message}. Usando email/senha.`);
+    return null;
+  }
+}
 
 async function fetchUserProfiles() {
-  // Fetch all active profiles with bot_ativo = true
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/profiles?bot_ativo=eq.true&select=*`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -45,12 +70,9 @@ async function fetchUserProfiles() {
 }
 
 async function downloadCurriculo(userId) {
-  // Download resume from Supabase Storage
   const resp = await fetch(
     `${SUPABASE_URL}/storage/v1/object/curriculos/${userId}/curriculo.pdf`,
-    {
-      headers: { apikey: SUPABASE_ANON_KEY },
-    }
+    { headers: { apikey: SUPABASE_ANON_KEY } }
   );
 
   if (!resp.ok) {
@@ -66,7 +88,7 @@ async function downloadCurriculo(userId) {
 }
 
 async function reportResults(userId, applications) {
-  // Send results back to the webhook API
+  if (applications.length === 0) return;
   try {
     const resp = await fetch(`${API_URL}/api/webhook/bot`, {
       method: "POST",
@@ -78,16 +100,17 @@ async function reportResults(userId, applications) {
     });
     
     if (resp.ok) {
-      log(`[API] Resultados reportados para user ${userId}`);
+      log(`[API] ${applications.length} resultados reportados para user ${userId}`);
     } else {
-      log(`[API] Erro ao reportar resultados: ${resp.status}`);
+      log(`[API] Erro ao reportar: ${resp.status}`);
     }
   } catch (err) {
-    log(`[API] Erro ao reportar resultados: ${err.message}`);
+    log(`[API] Erro ao reportar: ${err.message}`);
   }
 }
 
 async function reportLeads(userId, leads) {
+  if (leads.length === 0) return;
   try {
     const resp = await fetch(`${API_URL}/api/webhook/leads`, {
       method: "POST",
@@ -98,41 +121,32 @@ async function reportLeads(userId, leads) {
       }),
     });
     
-    if (resp.ok) {
-      log(`[API] Leads reportados para user ${userId}`);
-    }
+    if (resp.ok) log(`[API] ${leads.length} leads reportados`);
   } catch (err) {
     log(`[API] Erro ao reportar leads: ${err.message}`);
   }
 }
 
-/**
- * Get platform credentials from environment variables.
- * Per-user credentials can be added via Supabase in the future.
- */
 function getPlatformCreds(platform) {
   switch (platform) {
     case "indeed":
-      if (process.env.INDEED_EMAIL && process.env.INDEED_SENHA) {
+      if (process.env.INDEED_EMAIL && process.env.INDEED_SENHA)
         return { email: process.env.INDEED_EMAIL, senha: process.env.INDEED_SENHA };
-      }
       break;
     case "infojobs":
-      if (process.env.INFOJOBS_EMAIL && process.env.INFOJOBS_SENHA) {
+      if (process.env.INFOJOBS_EMAIL && process.env.INFOJOBS_SENHA)
         return { email: process.env.INFOJOBS_EMAIL, senha: process.env.INFOJOBS_SENHA };
-      }
       break;
     case "linkedin":
-      if (process.env.LINKEDIN_EMAIL && process.env.LINKEDIN_SENHA) {
+      if (process.env.LINKEDIN_EMAIL && process.env.LINKEDIN_SENHA)
         return { email: process.env.LINKEDIN_EMAIL, senha: process.env.LINKEDIN_SENHA };
-      }
       break;
   }
   return null;
 }
 
 async function main() {
-  log("[BOT] AutoCurriculo AI iniciando...");
+  log("[BOT] AutoCurriculo AI v2 iniciando...");
   log(`[BOT] Data/Hora: ${new Date().toISOString()}`);
 
   if (!SUPABASE_URL) {
@@ -140,7 +154,10 @@ async function main() {
     return;
   }
 
-  // Fetch active profiles
+  // Load session state or fallback to email/senha
+  const sessionState = loadSessionState();
+  const hasSession = !!sessionState;
+
   const profiles = await fetchUserProfiles();
   log(`[BOT] ${profiles.length} profiles ativos encontrados`);
 
@@ -149,18 +166,32 @@ async function main() {
     return;
   }
 
-  // Show which platforms are configured
-  const indeedCreds = getPlatformCreds("indeed");
-  const infojobsCreds = getPlatformCreds("infojobs");
-  const linkedinCreds = getPlatformCreds("linkedin");
-  log(`[BOT] Com login: ${[indeedCreds && "Indeed", infojobsCreds && "InfoJobs", linkedinCreds && "LinkedIn"].filter(Boolean).join(", ") || "nenhuma"}`);
-  log(`[BOT] Sem login (auto): TrabalhaBrasil, Vagas.com, +TrabalheConosco`);
+  const indeedCreds = hasSession ? { session: true } : getPlatformCreds("indeed");
+  const infojobsCreds = hasSession ? { session: true } : getPlatformCreds("infojobs");
+  const linkedinCreds = hasSession ? { session: true } : getPlatformCreds("linkedin");
 
-  // Launch browser once
+  log(`[BOT] Modo: ${hasSession ? "SESSAO (Google OAuth)" : "EMAIL/SENHA"}`);
+  log(`[BOT] Com login: ${[indeedCreds && "Indeed", infojobsCreds && "InfoJobs", linkedinCreds && "LinkedIn"].filter(Boolean).join(", ") || "nenhuma"}`);
+  log(`[BOT] Sem login: TrabalhaBrasil, Vagas.com, TrabalheConosco`);
+
+  // Create browser context options
+  const contextOptions = {
+    viewport: { width: 1366, height: 768 },
+    locale: "pt-BR",
+  };
+  
+  // If session state exists, inject it into the context
+  if (sessionState) {
+    contextOptions.storageState = sessionState;
+  }
+
   const browser = await chromium.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
   });
+
+  // Create shared authenticated context for platforms with login
+  const authContext = await browser.newContext(contextOptions);
 
   try {
     for (const profile of profiles) {
@@ -169,9 +200,8 @@ async function main() {
       const cidade = profile.cidade || "";
       const limiteDiario = profile.limite_diario || 100;
 
-      log(`[BOT] Processando user ${userId}: cargo="${cargo}", limite=${limiteDiario}`);
+      log(`[BOT] User ${userId}: cargo="${cargo}", limite=${limiteDiario}`);
 
-      // Download curriculo
       const cvPath = await downloadCurriculo(userId);
       if (!cvPath) {
         log(`[AVISO] Pulando user ${userId}: sem curriculo`);
@@ -180,102 +210,66 @@ async function main() {
 
       const allResults = [];
 
-      // === PLATAFORMAS COM LOGIN ===
+      // === PLATAFORMAS COM LOGIN (usam authContext com sessao) ===
 
-      // --- Indeed ---
       if (indeedCreds) {
-        log("[BOT] Executando Indeed...");
-        const indeedResults = await applyIndeed(browser, {
-          email: indeedCreds.email,
-          senha: indeedCreds.senha,
-          cargo,
-          cidade,
-          curriculoPath: cvPath,
-          limiteDiario,
+        log("[BOT] Indeed...");
+        const results = await applyIndeed(browser, authContext, {
+          ...(indeedCreds.session ? { session: true } : { email: indeedCreds.email, senha: indeedCreds.senha }),
+          cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
-        allResults.push(...indeedResults);
-        log(`[BOT] Indeed: ${indeedResults.length} resultados`);
+        allResults.push(...results);
+        log(`[BOT] Indeed: ${results.length} resultados`);
       }
 
-      // --- InfoJobs ---
       if (infojobsCreds) {
-        log("[BOT] Executando InfoJobs...");
-        const infojobsResults = await applyInfoJobs(browser, {
-          email: infojobsCreds.email,
-          senha: infojobsCreds.senha,
-          cargo,
-          cidade,
-          curriculoPath: cvPath,
-          limiteDiario,
+        log("[BOT] InfoJobs...");
+        const results = await applyInfoJobs(browser, authContext, {
+          ...(infojobsCreds.session ? { session: true } : { email: infojobsCreds.email, senha: infojobsCreds.senha }),
+          cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
-        allResults.push(...infojobsResults);
-        log(`[BOT] InfoJobs: ${infojobsResults.length} resultados`);
+        allResults.push(...results);
+        log(`[BOT] InfoJobs: ${results.length} resultados`);
       }
 
-      // --- LinkedIn ---
       if (linkedinCreds) {
-        log("[BOT] Executando LinkedIn...");
-        const linkedinResults = await applyLinkedIn(browser, {
-          email: linkedinCreds.email,
-          senha: linkedinCreds.senha,
-          cargo,
-          cidade,
-          curriculoPath: cvPath,
-          limiteDiario,
+        log("[BOT] LinkedIn...");
+        const results = await applyLinkedIn(browser, authContext, {
+          ...(linkedinCreds.session ? { session: true } : { email: linkedinCreds.email, senha: linkedinCreds.senha }),
+          cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
-        allResults.push(...linkedinResults);
-        log(`[BOT] LinkedIn: ${linkedinResults.length} resultados`);
+        allResults.push(...results);
+        log(`[BOT] LinkedIn: ${results.length} resultados`);
       }
 
-      // === PLATAFORMAS SEM LOGIN (DIRECT UPLOAD) ===
+      // === PLATAFORMAS SEM LOGIN ===
 
-      // --- Trabalha Brasil (no login needed) ---
-      log("[BOT] Executando Trabalha Brasil...");
-      const tbResults = await applyTrabalhaBrasil(browser, {
-        cargo,
-        cidade,
-        curriculoPath: cvPath,
-        limiteDiario,
-      });
+      log("[BOT] Trabalha Brasil...");
+      const tbResults = await applyTrabalhaBrasil(browser, { cargo, cidade, curriculoPath: cvPath, limiteDiario });
       allResults.push(...tbResults);
-      log(`[BOT] Trabalha Brasil: ${tbResults.length} resultados`);
 
-      // --- Vagas.com (no login needed) ---
-      log("[BOT] Executando Vagas.com...");
-      const vagasResults = await applyVagas(browser, {
-        cargo,
-        cidade,
-        curriculoPath: cvPath,
-        limiteDiario,
-      });
+      log("[BOT] Vagas.com...");
+      const vagasResults = await applyVagas(browser, { cargo, cidade, curriculoPath: cvPath, limiteDiario });
       allResults.push(...vagasResults);
-      log(`[BOT] Vagas.com: ${vagasResults.length} resultados`);
 
-      // --- Descobridor Trabalhe Conosco + Bot Generico ---
-      log("[BOT] Descobrindo paginas Trabalhe Conosco...");
+      log("[BOT] Descobrindo Trabalhe Conosco...");
       const discoveredUrls = await discoverCareerPages(browser, { cargo, cidade });
       if (discoveredUrls.length > 0) {
-        log(`[BOT] Aplicando para ${Math.min(discoveredUrls.length, limiteDiario)} URLs descobertas...`);
         const genericResults = await applyGeneric(browser, {
           curriculoPath: cvPath,
           plataforma: "TrabalheConosco",
           urls: discoveredUrls.slice(0, limiteDiario),
         });
         allResults.push(...genericResults);
-        log(`[BOT] Trabalhe Conosco: ${genericResults.length} resultados`);
       }
 
-      // --- Google Leads Scraper ---
-      log("[BOT] Executando Google scraper...");
+      // --- Google Leads ---
+      log("[BOT] Google Leads...");
       const leads = await scrapeGoogleLeads(browser, { cargo, cidade });
-      if (leads.length > 0) {
-        await reportLeads(userId, leads);
-      }
+      if (leads.length > 0) await reportLeads(userId, leads);
 
-      // Report results
-      if (allResults.length > 0) {
-        await reportResults(userId, allResults);
-      }
+      // Report all results
+      await reportResults(userId, allResults);
 
       const enviados = allResults.filter((r) => r.status === "enviado").length;
       log(`[BOT] User ${userId}: ${enviados} enviadas / ${allResults.length} processadas, ${leads.length} leads`);
@@ -284,8 +278,9 @@ async function main() {
   } catch (err) {
     log(`[ERRO CRITICO] ${err.message}`);
   } finally {
+    await authContext.close();
     await browser.close();
-    log("[BOT] Browser fechado. Finalizado.");
+    log("[BOT] Finalizado.");
   }
 }
 

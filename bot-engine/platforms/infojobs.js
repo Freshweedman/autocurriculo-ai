@@ -1,59 +1,57 @@
 const { randomDelay, humanType } = require("../utils/delays");
 const { log } = require("../utils/logger");
 
-/**
- * InfoJobs Brasil automation
- * Login, search jobs, apply with "Candidatura simples" (Easy Apply equivalent)
- */
-async function applyInfoJobs(browser, config) {
-  const { email, senha, cargo, cidade, curriculoPath, limiteDiario } = config;
+async function applyInfoJobs(browser, authContext, config) {
+  const { email, senha, session, cargo, cidade, curriculoPath, limiteDiario } = config;
   const results = [];
-  const context = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+
+  let context = authContext;
+  let shouldCloseContext = false;
+  if (!context) {
+    context = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+    shouldCloseContext = true;
+  }
   const page = await context.newPage();
 
   try {
-    log("[INFOJOBS] Acessando infojobs.com.br...");
-    await page.goto("https://www.infojobs.com.br/login.aspx", { waitUntil: "domcontentloaded" });
-    await randomDelay(2000, 4000);
+    if (session) {
+      log("[INFOJOBS] Modo sessao - verificando...");
+      await page.goto("https://www.infojobs.com.br", { waitUntil: "domcontentloaded" });
+      await randomDelay(2000, 3000);
 
-    // Login
-    log("[INFOJOBS] Fazendo login...");
-    await page.waitForSelector('input[name*="email"], input[id*="email"], input[type="email"]', { timeout: 10000 });
-    const emailInput = await page.$('input[name*="email"], input[id*="email"], input[type="email"]');
-    const senhaInput = await page.$('input[type="password"]');
-
-    if (emailInput && senhaInput) {
-      await emailInput.click();
-      await humanType(page, emailInput, email);
-      await senhaInput.click();
-      await humanType(page, senhaInput, senha);
-      const loginBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Entrar"), button:has-text("Login")');
-      if (loginBtn) {
-        await loginBtn.click();
-        await page.waitForURL("**/infojobs.com.br/**", { timeout: 15000 }).catch(() => {});
-        await randomDelay(3000, 5000);
-        log("[INFOJOBS] Login OK");
+      // Check if login is needed
+      const loginLink = await page.$('a[href*="login"], a:has-text("Entrar"), a:has-text("Login")');
+      if (loginLink) {
+        log("[INFOJOBS] Sessao expirada! Fallback email/senha...");
+        if (email && senha) {
+          await doInfoJobsLogin(page, email, senha);
+        } else {
+          log("[INFOJOBS] Sem fallback. Pulando.");
+          return results;
+        }
+      } else {
+        log("[INFOJOBS] Sessao Google ativa!");
       }
     } else {
-      log("[INFOJOBS] Campos de login nao encontrados");
-      return results;
+      log("[INFOJOBS] Acessando...");
+      await page.goto("https://www.infojobs.com.br/login.aspx", { waitUntil: "domcontentloaded" });
+      await randomDelay(2000, 4000);
+      await doInfoJobsLogin(page, email, senha);
     }
 
-    // Search jobs
+    // Search
     log("[INFOJOBS] Buscando vagas...");
     const searchUrl = `https://www.infojobs.com.br/empregos.aspx?palabra=${encodeURIComponent(cargo || "gestor de trafego")}${cidade ? `&ubicacion=${encodeURIComponent(cidade)}` : ""}`;
     await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
     await randomDelay(3000, 5000);
 
-    // Main application loop across pages
     const maxTarget = limiteDiario || 100;
     let applied = 0;
     let pageNum = 1;
 
     while (applied < maxTarget && pageNum <= 20) {
-      log(`[INFOJOBS] Processando pagina ${pageNum}...`);
+      log(`[INFOJOBS] Pagina ${pageNum}...`);
 
-      // Find job listing links
       const jobLinks = await page.$$('a[href*="/vaga-de-emprego/"], a[href*="/empregos/"]');
       const filteredLinks = [];
       for (const link of jobLinks) {
@@ -63,89 +61,92 @@ async function applyInfoJobs(browser, config) {
         }
       }
 
-      log(`[INFOJOBS] ${filteredLinks.length} vagas na pagina ${pageNum}`);
-
-      if (filteredLinks.length === 0) {
-        log("[INFOJOBS] Nenhuma vaga encontrada. Fim.");
-        break;
-      }
+      if (filteredLinks.length === 0) { log("[INFOJOBS] Fim."); break; }
+      log(`[INFOJOBS] ${filteredLinks.length} vagas`);
 
       for (const jobUrl of filteredLinks) {
         if (applied >= maxTarget) break;
-
         try {
-          log(`[INFOJOBS] Acessando vaga: ${jobUrl}`);
           const jobPage = await context.newPage();
           await jobPage.goto(jobUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
           await randomDelay(2000, 4000);
 
-          // Look for "Candidatura simples" or "Candidatar-se" button
           const candidatarBtn = await jobPage.$(
-            'button:has-text("Candidatura simples"), a:has-text("Candidatura simples"), button:has-text("Candidatar"), a:has-text("Candidatar"), button:has-text("Candidatar-se"), .candidatar-btn'
+            'button:has-text("Candidatura simples"), a:has-text("Candidatura simples"), button:has-text("Candidatar"), a:has-text("Candidatar"), button:has-text("Candidatar-se")'
           );
 
           if (candidatarBtn) {
             await candidatarBtn.click();
             await randomDelay(2000, 4000);
 
-            // Upload resume
             const fileInput = await jobPage.$('input[type="file"]');
             if (fileInput) {
               await fileInput.setInputFiles(curriculoPath);
-              log(`[INFOJOBS] Curriculo anexado - vaga #${applied + 1}`);
+              log(`[INFOJOBS] CV #${applied + 1}`);
               await randomDelay(1000, 2000);
 
-              // Submit
-              const submitBtn = await jobPage.$(
-                'button[type="submit"], input[type="submit"], button:has-text("Enviar"), button:has-text("Finalizar"), button:has-text("Confirmar")'
-              );
+              const submitBtn = await jobPage.$('button[type="submit"], input[type="submit"], button:has-text("Enviar"), button:has-text("Finalizar")');
               if (submitBtn) {
                 await submitBtn.click();
                 applied++;
-                log(`[OK] InfoJobs vaga #${applied} enviada`);
-                results.push({ empresa: "InfoJobs", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "InfoJobs", status: "enviado" });
+                results.push({ empresa: "InfoJobs", vaga: `infojobs-${applied}`, plataforma: "InfoJobs", status: "enviado" });
               } else {
-                results.push({ empresa: "InfoJobs", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "InfoJobs", status: "sem_submit" });
+                results.push({ empresa: "InfoJobs", vaga: `infojobs-${applied + 1}`, plataforma: "InfoJobs", status: "sem_submit" });
               }
             } else {
-              results.push({ empresa: "InfoJobs", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "InfoJobs", status: "sem_file_input" });
+              results.push({ empresa: "InfoJobs", vaga: `infojobs-${applied + 1}`, plataforma: "InfoJobs", status: "sem_file_input" });
             }
           } else {
-            results.push({ empresa: "InfoJobs", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "InfoJobs", status: "nao_suportado" });
+            results.push({ empresa: "InfoJobs", vaga: `infojobs-${applied + 1}`, plataforma: "InfoJobs", status: "nao_suportado" });
           }
 
           await jobPage.close();
           await randomDelay(2000, 4000);
         } catch (jobErr) {
-          log(`[ERRO] InfoJobs vaga: ${jobErr.message}`);
-          results.push({ empresa: "InfoJobs", vaga: jobUrl.split("/").pop() || "unknown", plataforma: "InfoJobs", status: "falhou" });
+          log(`[ERRO] InfoJobs: ${jobErr.message}`);
+          results.push({ empresa: "InfoJobs", vaga: "unknown", plataforma: "InfoJobs", status: "falhou" });
         }
       }
 
-      // Next page
       if (applied < maxTarget) {
-        const nextBtn = await page.$('a[rel="next"], a:has-text("Proxima"), a:has-text("Seguinte"), .pagination-next');
+        const nextBtn = await page.$('a[rel="next"], a:has-text("Proxima"), a:has-text("Seguinte")');
         if (nextBtn) {
           await nextBtn.click();
           await randomDelay(3000, 5000);
           pageNum++;
-        } else {
-          log("[INFOJOBS] Sem mais paginas.");
-          break;
-        }
+        } else { break; }
       }
     }
 
-    log(`[INFOJOBS] Finalizado: ${applied} candidaturas enviadas`);
-
+    log(`[INFOJOBS] ${applied} enviadas`);
   } catch (err) {
-    log(`[ERRO CRITICO] InfoJobs: ${err.message}`);
+    log(`[ERRO] InfoJobs: ${err.message}`);
     await page.screenshot({ path: "/tmp/infojobs-error.png" });
   } finally {
-    await context.close();
+    if (shouldCloseContext) await context.close();
+    else await page.close();
   }
 
   return results;
+}
+
+async function doInfoJobsLogin(page, email, senha) {
+  log("[INFOJOBS] Login email/senha...");
+  await page.waitForSelector('input[type="email"], input[name*="email"]', { timeout: 10000 });
+  const emailInput = await page.$('input[type="email"], input[name*="email"]');
+  const senhaInput = await page.$('input[type="password"]');
+  if (emailInput && senhaInput) {
+    await emailInput.click();
+    await humanType(page, emailInput, email);
+    await senhaInput.click();
+    await humanType(page, senhaInput, senha);
+    const loginBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Entrar")');
+    if (loginBtn) {
+      await loginBtn.click();
+      await page.waitForURL("**/infojobs.com.br/**", { timeout: 15000 }).catch(() => {});
+      await randomDelay(3000, 5000);
+    }
+  }
 }
 
 module.exports = { applyInfoJobs };

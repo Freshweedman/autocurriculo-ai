@@ -40,6 +40,7 @@ jobs:
           INFOJOBS_SENHA: ${{ secrets.INFOJOBS_SENHA }}
           LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
           LINKEDIN_SENHA: ${{ secrets.LINKEDIN_SENHA }}
+          SESSION_STATE: ${{ secrets.SESSION_STATE }}
         run: node bot.js
 
       - name: Upload logs (always)
