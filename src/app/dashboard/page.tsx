@@ -44,8 +44,8 @@ export default function DashboardPage() {
       semana: semanaCount || 0,
       mes: mesCount || 0,
       leads: leadsCount || 0,
-      botAtivo: profile?.data?.bot_ativo ?? false,
-      limiteDiario: profile?.data?.limite_diario ?? 5,
+      botAtivo: profile?.bot_ativo ?? false,
+      limiteDiario: profile?.limite_diario ?? 5,
     });
     setLoading(false);
   };

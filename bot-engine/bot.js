@@ -54,12 +54,17 @@ function loadSessionState() {
 }
 
 async function fetchUserProfiles() {
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/profiles?bot_ativo=eq.true&select=*`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-    },
-  });
+  // Use service role key to read all active profiles including credentials
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+  const resp = await fetch(
+    `${SUPABASE_URL}/rest/v1/profiles?bot_ativo=eq.true&select=user_id,cargo,cidade,limite_diario,indeed_email,indeed_senha,linkedin_email,linkedin_senha,infojobs_email,infojobs_senha`,
+    {
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+      },
+    }
+  );
   
   if (!resp.ok) {
     log(`[API] Erro ao buscar profiles: ${resp.status} ${resp.statusText}`);
@@ -127,17 +132,25 @@ async function reportLeads(userId, leads) {
   }
 }
 
-function getPlatformCreds(platform) {
+function getPlatformCreds(platform, profile) {
+  // Priority: credentials stored in user's profile (set via dashboard)
+  // Fallback: env vars (legacy / admin override)
   switch (platform) {
     case "indeed":
+      if (profile.indeed_email && profile.indeed_senha)
+        return { email: profile.indeed_email, senha: profile.indeed_senha };
       if (process.env.INDEED_EMAIL && process.env.INDEED_SENHA)
         return { email: process.env.INDEED_EMAIL, senha: process.env.INDEED_SENHA };
       break;
     case "infojobs":
+      if (profile.infojobs_email && profile.infojobs_senha)
+        return { email: profile.infojobs_email, senha: profile.infojobs_senha };
       if (process.env.INFOJOBS_EMAIL && process.env.INFOJOBS_SENHA)
         return { email: process.env.INFOJOBS_EMAIL, senha: process.env.INFOJOBS_SENHA };
       break;
     case "linkedin":
+      if (profile.linkedin_email && profile.linkedin_senha)
+        return { email: profile.linkedin_email, senha: profile.linkedin_senha };
       if (process.env.LINKEDIN_EMAIL && process.env.LINKEDIN_SENHA)
         return { email: process.env.LINKEDIN_EMAIL, senha: process.env.LINKEDIN_SENHA };
       break;
@@ -166,12 +179,11 @@ async function main() {
     return;
   }
 
-  const indeedCreds = hasSession ? { session: true } : getPlatformCreds("indeed");
-  const infojobsCreds = hasSession ? { session: true } : getPlatformCreds("infojobs");
-  const linkedinCreds = hasSession ? { session: true } : getPlatformCreds("linkedin");
+  const indeedCreds = hasSession ? { session: true } : null;
+  const infojobsCreds = hasSession ? { session: true } : null;
+  const linkedinCreds = hasSession ? { session: true } : null;
 
-  log(`[BOT] Modo: ${hasSession ? "SESSAO (Google OAuth)" : "EMAIL/SENHA"}`);
-  log(`[BOT] Com login: ${[indeedCreds && "Indeed", infojobsCreds && "InfoJobs", linkedinCreds && "LinkedIn"].filter(Boolean).join(", ") || "nenhuma"}`);
+  log(`[BOT] Modo: ${hasSession ? "SESSAO (Google OAuth)" : "EMAIL/SENHA (por perfil)"}`);
   log(`[BOT] Sem login: TrabalhaBrasil, Vagas.com, TrabalheConosco`);
 
   // Create browser context options
@@ -202,6 +214,17 @@ async function main() {
 
       log(`[BOT] User ${userId}: cargo="${cargo}", limite=${limiteDiario}`);
 
+      // Resolve credentials per-profile (from DB or env fallback)
+      const profileIndeedCreds   = hasSession ? { session: true } : getPlatformCreds("indeed",   profile);
+      const profileLinkedinCreds = hasSession ? { session: true } : getPlatformCreds("linkedin", profile);
+      const profileInfojobsCreds = hasSession ? { session: true } : getPlatformCreds("infojobs", profile);
+
+      log(`[BOT] Plataformas com login: ${[
+        profileIndeedCreds   && "Indeed",
+        profileLinkedinCreds && "LinkedIn",
+        profileInfojobsCreds && "InfoJobs",
+      ].filter(Boolean).join(", ") || "nenhuma (so plataformas sem login)"}`);
+
       const cvPath = await downloadCurriculo(userId);
       if (!cvPath) {
         log(`[AVISO] Pulando user ${userId}: sem curriculo`);
@@ -212,30 +235,30 @@ async function main() {
 
       // === PLATAFORMAS COM LOGIN (usam authContext com sessao) ===
 
-      if (indeedCreds) {
+      if (profileIndeedCreds) {
         log("[BOT] Indeed...");
         const results = await applyIndeed(browser, authContext, {
-          ...(indeedCreds.session ? { session: true } : { email: indeedCreds.email, senha: indeedCreds.senha }),
+          ...(profileIndeedCreds.session ? { session: true } : { email: profileIndeedCreds.email, senha: profileIndeedCreds.senha }),
           cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
         allResults.push(...results);
         log(`[BOT] Indeed: ${results.length} resultados`);
       }
 
-      if (infojobsCreds) {
+      if (profileInfojobsCreds) {
         log("[BOT] InfoJobs...");
         const results = await applyInfoJobs(browser, authContext, {
-          ...(infojobsCreds.session ? { session: true } : { email: infojobsCreds.email, senha: infojobsCreds.senha }),
+          ...(profileInfojobsCreds.session ? { session: true } : { email: profileInfojobsCreds.email, senha: profileInfojobsCreds.senha }),
           cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
         allResults.push(...results);
         log(`[BOT] InfoJobs: ${results.length} resultados`);
       }
 
-      if (linkedinCreds) {
+      if (profileLinkedinCreds) {
         log("[BOT] LinkedIn...");
         const results = await applyLinkedIn(browser, authContext, {
-          ...(linkedinCreds.session ? { session: true } : { email: linkedinCreds.email, senha: linkedinCreds.senha }),
+          ...(profileLinkedinCreds.session ? { session: true } : { email: profileLinkedinCreds.email, senha: profileLinkedinCreds.senha }),
           cargo, cidade, curriculoPath: cvPath, limiteDiario,
         });
         allResults.push(...results);

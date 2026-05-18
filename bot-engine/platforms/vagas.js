@@ -102,7 +102,7 @@ async function applyVagas(browser, config) {
 
       // Next page
       if (applied < maxTarget) {
-        const nextBtn = await jobPage.$(
+        const nextBtn = await page.$(
           'a[rel="next"], a:has-text("Proxima"), a:has-text(">"), .pagination .next, .pagination a:has-text(">"), .proxima'
         );
         if (nextBtn) {

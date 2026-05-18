@@ -12,6 +12,13 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   cidade TEXT DEFAULT '',
   limite_diario INTEGER DEFAULT 5,
   bot_ativo BOOLEAN DEFAULT false,
+  -- Platform credentials (set by user in dashboard, never exposed client-side)
+  indeed_email    TEXT DEFAULT NULL,
+  indeed_senha    TEXT DEFAULT NULL,
+  linkedin_email  TEXT DEFAULT NULL,
+  linkedin_senha  TEXT DEFAULT NULL,
+  infojobs_email  TEXT DEFAULT NULL,
+  infojobs_senha  TEXT DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE(user_id)

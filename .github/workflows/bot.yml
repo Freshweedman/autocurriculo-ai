@@ -32,6 +32,7 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BOT_API_KEY: ${{ secrets.BOT_API_KEY }}
           API_URL: ${{ secrets.API_URL }}
           INDEED_EMAIL: ${{ secrets.INDEED_EMAIL }}

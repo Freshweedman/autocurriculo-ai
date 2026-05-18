@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase/client";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req: NextRequest) {
   const { apiKey, applications } = await req.json();
 
-  // Validacao simples de API key
   if (apiKey !== process.env.BOT_API_KEY) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const supabase = createAdminClient();
   const results: { id: string; empresa: string; status: string }[] = [];
 
   for (const app of applications) {
