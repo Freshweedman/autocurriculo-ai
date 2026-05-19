@@ -149,6 +149,56 @@ async function reportLeads(userId, leads) {
   }
 }
 
+function expandirTermosBusca(cargo) {
+  const cargoLower = (cargo || "").toLowerCase();
+
+  // Termos base sempre incluidos
+  const termos = new Set([cargo]);
+
+  // Mapeamento de termos relacionados por area
+  const mapa = {
+    "trafego": [
+      "gestor de trafego",
+      "gestor de trafego pago",
+      "analista de trafego pago",
+      "especialista em trafego pago",
+      "media buyer",
+      "performance marketing",
+    ],
+    "marketing": [
+      "marketing digital",
+      "analista de marketing digital",
+      "coordenador de marketing",
+      "especialista em marketing",
+      "growth hacker",
+      "inbound marketing",
+    ],
+    "google ads": ["google ads", "sem specialist", "ppc specialist"],
+    "facebook ads": ["facebook ads", "meta ads", "social ads"],
+    "social media": ["social media", "analista de redes sociais", "community manager"],
+    "seo": ["seo", "analista de seo", "especialista em seo"],
+    "copywriting": ["copywriter", "redator publicitario", "content writer"],
+    "design": ["designer grafico", "ui designer", "ux designer", "web designer"],
+    "desenvolvedor": ["desenvolvedor web", "front end", "full stack", "programador"],
+    "vendas": ["vendedor", "representante comercial", "executivo de vendas", "closer"],
+  };
+
+  // Adiciona termos relacionados baseado no cargo
+  for (const [chave, relacionados] of Object.entries(mapa)) {
+    if (cargoLower.includes(chave)) {
+      relacionados.forEach(t => termos.add(t));
+    }
+  }
+
+  // Se nao encontrou nada especifico, adiciona termos gerais de marketing
+  if (termos.size === 1) {
+    ["marketing digital", "gestor de trafego pago", "analista de marketing"].forEach(t => termos.add(t));
+  }
+
+  const lista = Array.from(termos).slice(0, 6); // max 6 termos para nao demorar demais
+  return lista;
+}
+
 function getPlatformCreds(platform, profile) {
   // Priority: credentials stored in user's profile (set via dashboard)
   // Fallback: env vars (legacy / admin override)
@@ -255,11 +305,16 @@ async function main() {
   try {
     for (const profile of profiles) {
       const userId = profile.user_id;
-      const cargo = profile.cargo || "gestor de trafego";
+      const cargoBase = profile.cargo || "gestor de trafego";
       const cidade = profile.cidade || "";
       const limiteDiario = profile.limite_diario || 100;
 
-      log(`[BOT] User ${userId}: cargo="${cargo}", limite=${limiteDiario}`);
+      // Expandir termos de busca baseado no cargo principal
+      const termosRelacionados = expandirTermosBusca(cargoBase);
+      const limitePorTermo = Math.ceil(limiteDiario / termosRelacionados.length);
+
+      log(`[BOT] User ${userId}: cargo="${cargoBase}", termos=${termosRelacionados.length}, limite=${limiteDiario}`);
+      log(`[BOT] Buscando por: ${termosRelacionados.join(", ")}`);
 
       // Resolve credentials per-profile (from DB or env fallback)
       const profileIndeedCreds   = hasSession ? { session: true } : getPlatformCreds("indeed",    profile);
@@ -303,64 +358,76 @@ async function main() {
       }
 
       if (profileInfojobsCreds) {
-        log("[BOT] InfoJobs...");
-        const r = await applyInfoJobs(browser, authContext, {
-          ...(profileInfojobsCreds.session ? { session: true } : { email: profileInfojobsCreds.email, senha: profileInfojobsCreds.senha }),
-          cargo, cidade, curriculoPath: cvPath, limiteDiario,
-        });
-        allResults.push(...r);
-        log(`[BOT] InfoJobs: ${r.length} resultados`);
+        for (const termo of termosRelacionados) {
+          log(`[BOT] InfoJobs: "${termo}"...`);
+          const r = await applyInfoJobs(browser, authContext, {
+            ...(profileInfojobsCreds.session ? { session: true } : { email: profileInfojobsCreds.email, senha: profileInfojobsCreds.senha }),
+            cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
+          });
+          allResults.push(...r);
+        }
+        log(`[BOT] InfoJobs total: ${allResults.filter(r=>r.plataforma==="InfoJobs").length} resultados`);
       }
 
       if (profileLinkedinCreds) {
-        log("[BOT] LinkedIn...");
-        const r = await applyLinkedIn(browser, authContext, {
-          ...(profileLinkedinCreds.session ? { session: true } : { email: profileLinkedinCreds.email, senha: profileLinkedinCreds.senha }),
-          cargo, cidade, curriculoPath: cvPath, limiteDiario,
-        });
-        allResults.push(...r);
-        log(`[BOT] LinkedIn: ${r.length} resultados`);
+        for (const termo of termosRelacionados) {
+          log(`[BOT] LinkedIn: "${termo}"...`);
+          const r = await applyLinkedIn(browser, authContext, {
+            ...(profileLinkedinCreds.session ? { session: true } : { email: profileLinkedinCreds.email, senha: profileLinkedinCreds.senha }),
+            cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
+          });
+          allResults.push(...r);
+        }
+        log(`[BOT] LinkedIn total: ${allResults.filter(r=>r.plataforma==="LinkedIn").length} resultados`);
       }
 
       if (profileCathoCreds) {
-        log("[BOT] Catho...");
-        const r = await applyCatho(browser, authContext, {
-          ...(profileCathoCreds.session ? { session: true } : { email: profileCathoCreds.email, senha: profileCathoCreds.senha }),
-          cargo, cidade, curriculoPath: cvPath, limiteDiario,
-        });
-        allResults.push(...r);
-        log(`[BOT] Catho: ${r.length} resultados`);
+        for (const termo of termosRelacionados) {
+          log(`[BOT] Catho: "${termo}"...`);
+          const r = await applyCatho(browser, authContext, {
+            ...(profileCathoCreds.session ? { session: true } : { email: profileCathoCreds.email, senha: profileCathoCreds.senha }),
+            cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
+          });
+          allResults.push(...r);
+        }
+        log(`[BOT] Catho total: ${allResults.filter(r=>r.plataforma==="Catho").length} resultados`);
       }
 
       if (profileSineCreds) {
-        log("[BOT] Sine...");
-        const r = await applySine(browser, null, {
-          email: profileSineCreds.email, senha: profileSineCreds.senha,
-          cargo, cidade, curriculoPath: cvPath, limiteDiario,
-        });
-        allResults.push(...r);
-        log(`[BOT] Sine: ${r.length} resultados`);
+        for (const termo of termosRelacionados) {
+          log(`[BOT] Sine: "${termo}"...`);
+          const r = await applySine(browser, null, {
+            email: profileSineCreds.email, senha: profileSineCreds.senha,
+            cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
+          });
+          allResults.push(...r);
+        }
+        log(`[BOT] Sine total: ${allResults.filter(r=>r.plataforma==="Sine").length} resultados`);
       }
 
       // ── PLATAFORMAS CLT SEM LOGIN ──────────────────────────────────────────
 
-      log("[BOT] TrabalhaBrasil...");
-      const tbResults = await applyTrabalhaBrasil(browser, { cargo, cidade, curriculoPath: cvPath, limiteDiario });
-      allResults.push(...tbResults);
-      log(`[BOT] TrabalhaBrasil: ${tbResults.length} resultados`);
+      for (const termo of termosRelacionados) {
+        log(`[BOT] TrabalhaBrasil: "${termo}"...`);
+        const r = await applyTrabalhaBrasil(browser, { cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo });
+        allResults.push(...r);
+      }
+      log(`[BOT] TrabalhaBrasil total: ${allResults.filter(r=>r.plataforma==="TrabalhaBrasil").length} resultados`);
 
-      log("[BOT] Vagas.com...");
-      const vagasResults = await applyVagas(browser, { cargo, cidade, curriculoPath: cvPath, limiteDiario });
-      allResults.push(...vagasResults);
-      log(`[BOT] Vagas.com: ${vagasResults.length} resultados`);
+      for (const termo of termosRelacionados) {
+        log(`[BOT] Vagas.com: "${termo}"...`);
+        const r = await applyVagas(browser, { cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo });
+        allResults.push(...r);
+      }
+      log(`[BOT] Vagas.com total: ${allResults.filter(r=>r.plataforma==="Vagas").length} resultados`);
 
       log("[BOT] EmpregoLigado...");
-      const elResults = await applyEmpregoLigado(browser, { cargo, cidade, curriculoPath: cvPath, limiteDiario });
+      const elResults = await applyEmpregoLigado(browser, { cargo: cargoBase, cidade, curriculoPath: cvPath, limiteDiario });
       allResults.push(...elResults);
       log(`[BOT] EmpregoLigado: ${elResults.length} resultados`);
 
       log("[BOT] Descobrindo Trabalhe Conosco...");
-      const discoveredUrls = await discoverCareerPages(browser, { cargo, cidade });
+      const discoveredUrls = await discoverCareerPages(browser, { cargo: cargoBase, cidade });
       if (discoveredUrls.length > 0) {
         const genericResults = await applyGeneric(browser, {
           curriculoPath: cvPath,
@@ -377,7 +444,7 @@ async function main() {
         log("[BOT] Workana...");
         const r = await applyWorkana(browser, null, {
           email: profileWorkanaCreds.email, senha: profileWorkanaCreds.senha,
-          cargo, curriculoPath: cvPath, limiteDiario,
+          cargo: cargoBase, curriculoPath: cvPath, limiteDiario,
         });
         allResults.push(...r);
         log(`[BOT] Workana: ${r.length} resultados`);
@@ -387,7 +454,7 @@ async function main() {
         log("[BOT] GetNinjas...");
         const r = await applyGetNinjas(browser, null, {
           email: profileNinjasCreds.email, senha: profileNinjasCreds.senha,
-          cargo, cidade, limiteDiario,
+          cargo: cargoBase, cidade, limiteDiario,
         });
         allResults.push(...r);
         log(`[BOT] GetNinjas: ${r.length} resultados`);
@@ -397,7 +464,7 @@ async function main() {
         log("[BOT] 99Freelas...");
         const r = await apply99Freelas(browser, null, {
           email: profileFreelas99Creds.email, senha: profileFreelas99Creds.senha,
-          cargo, limiteDiario,
+          cargo: cargoBase, limiteDiario,
         });
         allResults.push(...r);
         log(`[BOT] 99Freelas: ${r.length} resultados`);
@@ -405,7 +472,7 @@ async function main() {
 
       // --- Google Leads ---
       log("[BOT] Google Leads...");
-      const leads = await scrapeGoogleLeads(browser, { cargo, cidade });
+      const leads = await scrapeGoogleLeads(browser, { cargo: cargoBase, cidade });
       if (leads.length > 0) await reportLeads(userId, leads);
 
       // Report all results
