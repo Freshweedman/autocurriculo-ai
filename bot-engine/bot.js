@@ -370,15 +370,45 @@ async function main() {
       }
 
       if (profileLinkedinCreds) {
-        for (const termo of termosRelacionados) {
-          log(`[BOT] LinkedIn: "${termo}"...`);
-          const r = await applyLinkedIn(browser, authContext, {
-            ...(profileLinkedinCreds.session ? { session: true } : { email: profileLinkedinCreds.email, senha: profileLinkedinCreds.senha }),
-            cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
-          });
-          allResults.push(...r);
+        // Login LinkedIn uma unica vez, depois reutiliza o contexto para todos os termos
+        log("[BOT] LinkedIn: fazendo login...");
+        const linkedinPage = await authContext.newPage();
+        await linkedinPage.goto("https://www.linkedin.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
+        await linkedinPage.waitForTimeout(3000);
+
+        // Preencher login
+        let linkedinLogado = false;
+        for (const sel of ["#username", 'input[name="session_key"]', 'input[autocomplete="username"]']) {
+          const el = await linkedinPage.$(sel);
+          if (el) {
+            await linkedinPage.evaluate((s) => {
+              const e = document.querySelector(s);
+              if (e) { e.style.display = "block"; e.style.visibility = "visible"; e.style.opacity = "1"; }
+            }, sel);
+            await linkedinPage.fill(sel, profileLinkedinCreds.email);
+            linkedinLogado = true;
+            break;
+          }
         }
-        log(`[BOT] LinkedIn total: ${allResults.filter(r=>r.plataforma==="LinkedIn").length} resultados`);
+        if (linkedinLogado) {
+          await linkedinPage.fill('input[type="password"]', profileLinkedinCreds.senha).catch(() => {});
+          await linkedinPage.click('button[type="submit"]').catch(() => {});
+          await linkedinPage.waitForTimeout(6000);
+        }
+        await linkedinPage.close();
+
+        const linkedinOk = !(await authContext.pages()[0]?.url().includes("/login") ?? false);
+        if (linkedinLogado) {
+          for (const termo of termosRelacionados) {
+            log(`[BOT] LinkedIn: "${termo}"...`);
+            const r = await applyLinkedIn(browser, authContext, {
+              session: true, // ja logado, usa contexto existente
+              cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
+            });
+            allResults.push(...r);
+          }
+          log(`[BOT] LinkedIn total: ${allResults.filter(r=>r.plataforma==="LinkedIn").length} resultados`);
+        }
       }
 
       if (profileCathoCreds) {

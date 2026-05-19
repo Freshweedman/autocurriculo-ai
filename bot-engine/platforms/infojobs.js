@@ -39,9 +39,9 @@ async function applyInfoJobs(browser, authContext, config) {
       await doInfoJobsLogin(page, email, senha);
     }
 
-    // Search
+    // Search — sem filtro de cidade para pegar vagas remotas de todo Brasil
     log("[INFOJOBS] Buscando vagas...");
-    const searchUrl = `https://www.infojobs.com.br/empregos.aspx?palabra=${encodeURIComponent(cargo || "gestor de trafego")}${cidade ? `&ubicacion=${encodeURIComponent(cidade)}` : ""}`;
+    const searchUrl = `https://www.infojobs.com.br/empregos.aspx?palabra=${encodeURIComponent(cargo || "gestor de trafego")}&modalidad=4`; // modalidad=4 = remoto
     await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
     await randomDelay(3000, 5000);
 
