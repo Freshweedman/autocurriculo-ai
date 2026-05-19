@@ -87,6 +87,17 @@ async function applyWorkana(browser, authContext, config) {
           await jobPage.goto(jobUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
           await randomDelay(2000, 4000);
 
+          // Debug: logar todos os botoes visiveis na pagina
+          const botoesVisiveis = await jobPage.evaluate(() => {
+            const btns = document.querySelectorAll('button, a[class*="btn"], a[class*="button"]');
+            return Array.from(btns)
+              .filter(b => b.offsetParent !== null)
+              .map(b => b.textContent?.trim().slice(0, 50))
+              .filter(Boolean)
+              .slice(0, 10);
+          });
+          log(`[WORKANA] Botoes na pagina: ${botoesVisiveis.join(' | ')}`);
+
           // Botao de proposta — Workana usa varios textos dependendo do idioma/plano
           const propBtn = await jobPage.$(
             'button:has-text("Enviar proposta"), a:has-text("Enviar proposta"), ' +
