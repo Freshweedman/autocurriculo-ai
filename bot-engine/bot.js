@@ -72,7 +72,7 @@ async function fetchUserProfiles() {
   // Use service role key to read all active profiles including credentials
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
   const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?bot_ativo=eq.true&select=user_id,cargo,cidade,limite_diario,indeed_email,indeed_senha,linkedin_email,linkedin_senha,infojobs_email,infojobs_senha`,
+    `${SUPABASE_URL}/rest/v1/profiles?bot_ativo=eq.true&select=user_id,cargo,cidade,limite_diario,indeed_email,indeed_senha,linkedin_email,linkedin_senha,infojobs_email,infojobs_senha,catho_email,catho_senha,sine_email,sine_senha,workana_email,workana_senha,getninjas_email,getninjas_senha,freelas99_email,freelas99_senha`,
     {
       headers: {
         apikey: key,
