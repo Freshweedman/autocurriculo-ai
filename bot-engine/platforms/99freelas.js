@@ -1,6 +1,48 @@
 const { randomDelay, humanType } = require("../utils/delays");
 const { log } = require("../utils/logger");
 
+// Palavras-chave relevantes para marketing/trafego
+const PALAVRAS_RELEVANTES = [
+  "trafego", "tráfego", "marketing", "ads", "google ads", "meta ads",
+  "facebook ads", "instagram", "social media", "redes sociais", "performance",
+  "roi", "roas", "campanha", "anuncio", "anúncio", "leads", "conversao",
+  "conversão", "funil", "growth", "seo", "sem", "ppc", "media buyer",
+  "gestor", "analista", "especialista", "digital", "inbound", "outbound",
+  "copywriting", "copy", "landing page", "email marketing", "crm",
+  "automacao", "automação", "vendas", "comercial", "prospeccao", "prospecção",
+];
+
+function projetoEhRelevante(titulo, cargo) {
+  const tituloLower = (titulo || "").toLowerCase();
+  const cargoLower = (cargo || "").toLowerCase();
+
+  // Verifica se o titulo contem alguma palavra relevante
+  const temPalavraRelevante = PALAVRAS_RELEVANTES.some(p => tituloLower.includes(p));
+
+  // Palavras que indicam projeto IRRELEVANTE (nao candidatar)
+  const palavrasIrrelevantes = [
+    "fotografia", "fotografo", "foto ", "ensaio", "casamento",
+    "musica", "música", "mixagem", "masterizacao", "masterização", "deathcore",
+    "arquitetura", "arquiteto", "planta baixa", "autocad", "marcenaria",
+    "juridico", "jurídico", "advocacia", "advogado", "tcc", "monografia",
+    "traducao", "tradução", "interprete", "intérprete",
+    "contador", "contabilidade", "crc",
+    "engenharia", "hidraulico", "hidráulico", "eletrico", "elétrico",
+    "3d", "modelagem 3d", "pixar", "personagem",
+    "pianista", "musico", "músico",
+    "coreana", "coreano", "japones", "japonês",
+    "porcelanato", "andaime", "escorament",
+    "shell eco marathon", "carenagem",
+    "tokenizacao", "tokenização", "blockchain", "smart contract",
+    "rfid", "autocad",
+  ];
+
+  const temPalavraIrrelevante = palavrasIrrelevantes.some(p => tituloLower.includes(p));
+
+  if (temPalavraIrrelevante) return false;
+  return temPalavraRelevante;
+}
+
 /**
  * 99Freelas automation
  * https://www.99freelas.com.br
@@ -79,6 +121,13 @@ async function apply99Freelas(browser, authContext, config) {
         if (applied >= maxTarget) break;
         try {
           const jobUrl = href.startsWith("http") ? href : `https://www.99freelas.com.br${href}`;
+
+          // Filtrar por relevancia pelo titulo da URL antes de abrir a pagina
+          const tituloUrl = decodeURIComponent(jobUrl.split("/").pop() || "").replace(/-/g, " ");
+          if (!projetoEhRelevante(tituloUrl, cargo)) {
+            log(`[99FREELAS] Pulando irrelevante: ${tituloUrl.slice(0, 60)}`);
+            continue;
+          }
           const jobPage = await context.newPage();
           await jobPage.goto(jobUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
           await randomDelay(2000, 4000);

@@ -1,6 +1,36 @@
 const { randomDelay, humanType } = require("../utils/delays");
 const { log } = require("../utils/logger");
 
+// Palavras-chave relevantes para marketing/trafego
+const PALAVRAS_RELEVANTES = [
+  "trafego", "tráfego", "marketing", "ads", "google ads", "meta ads",
+  "facebook ads", "instagram", "social media", "redes sociais", "performance",
+  "roi", "roas", "campanha", "anuncio", "anúncio", "leads", "conversao",
+  "conversão", "funil", "growth", "seo", "sem", "ppc", "media buyer",
+  "gestor", "analista", "especialista", "digital", "inbound", "outbound",
+  "copywriting", "copy", "landing page", "email marketing", "crm",
+  "automacao", "automação", "vendas", "comercial", "prospeccao", "prospecção",
+];
+
+function projetoEhRelevante(titulo, cargo) {
+  const tituloLower = (titulo || "").toLowerCase();
+  const palavrasIrrelevantes = [
+    "fotografia", "fotografo", "foto ", "ensaio", "casamento",
+    "musica", "música", "mixagem", "masterizacao", "masterização",
+    "arquitetura", "arquiteto", "planta baixa", "autocad", "marcenaria",
+    "juridico", "jurídico", "advocacia", "advogado", "tcc", "monografia",
+    "traducao", "tradução", "interprete", "intérprete",
+    "contador", "contabilidade", "crc",
+    "engenharia", "hidraulico", "hidráulico", "eletrico", "elétrico",
+    "3d", "modelagem 3d", "pixar", "personagem",
+    "pianista", "musico", "músico",
+    "porcelanato", "andaime", "shell eco marathon", "carenagem",
+    "tokenizacao", "blockchain", "smart contract", "rfid",
+  ];
+  if (palavrasIrrelevantes.some(p => tituloLower.includes(p))) return false;
+  return PALAVRAS_RELEVANTES.some(p => tituloLower.includes(p));
+}
+
 /**
  * Workana automation
  * https://www.workana.com/pt
@@ -83,6 +113,14 @@ async function applyWorkana(browser, authContext, config) {
         if (applied >= maxTarget) break;
         try {
           const jobUrl = href.startsWith("http") ? href : `https://www.workana.com${href}`;
+
+          // Filtrar por relevancia pelo titulo da URL
+          const tituloUrl = decodeURIComponent(jobUrl.split("/").pop() || "").replace(/-/g, " ");
+          if (!projetoEhRelevante(tituloUrl, cargo)) {
+            log(`[WORKANA] Pulando irrelevante: ${tituloUrl.slice(0, 60)}`);
+            continue;
+          }
+
           const jobPage = await context.newPage();
           await jobPage.goto(jobUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
           await randomDelay(2000, 4000);
