@@ -87,22 +87,42 @@ async function applyWorkana(browser, authContext, config) {
           await jobPage.goto(jobUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
           await randomDelay(2000, 4000);
 
-          // Botao de proposta
+          // Botao de proposta — Workana usa varios textos dependendo do idioma/plano
           const propBtn = await jobPage.$(
-            'button:has-text("Enviar proposta"), a:has-text("Enviar proposta"), button:has-text("Fazer proposta"), button:has-text("Submit proposal")'
+            'button:has-text("Enviar proposta"), a:has-text("Enviar proposta"), ' +
+            'button:has-text("Fazer proposta"), button:has-text("Submit proposal"), ' +
+            'button:has-text("Send proposal"), a:has-text("Send proposal"), ' +
+            'button:has-text("Aplicar"), a:has-text("Aplicar"), ' +
+            'button:has-text("Apply"), a:has-text("Apply"), ' +
+            '[data-testid*="proposal"], [data-testid*="apply"]'
           );
           if (propBtn) {
+            log(`[WORKANA] Botao proposta encontrado`);
             await propBtn.click();
             await randomDelay(2000, 4000);
 
-            // Preencher proposta
-            const textarea = await jobPage.$('textarea[name*="proposal"], textarea[name*="message"], textarea[placeholder*="proposta"], textarea[placeholder*="descri"]');
-            if (textarea) {
-              const proposta = `Ola! Sou especialista em ${cargo || "marketing digital"} com experiencia comprovada. Tenho interesse neste projeto e posso entregar resultados de qualidade dentro do prazo. Vamos conversar sobre os detalhes?`;
-              await textarea.click();
-              await humanType(jobPage, 'textarea[name*="proposal"], textarea[name*="message"], textarea[placeholder*="proposta"], textarea[placeholder*="descri"]', proposta);
-              await randomDelay(1000, 2000);
+            // Preencher proposta — tenta varios seletores de textarea
+            const textareaSelectors = [
+              'textarea[name*="proposal"]',
+              'textarea[name*="message"]',
+              'textarea[name*="description"]',
+              'textarea[placeholder*="proposta"]',
+              'textarea[placeholder*="descri"]',
+              'textarea[placeholder*="proposal"]',
+              'textarea',
+            ];
+            let textareaFilled = false;
+            for (const sel of textareaSelectors) {
+              const textarea = await jobPage.$(sel);
+              if (textarea) {
+                const proposta = `Ola! Sou especialista em ${cargo || "marketing digital"} com 6 anos de experiencia. Tenho interesse neste projeto e posso entregar resultados de qualidade dentro do prazo. Vamos conversar sobre os detalhes?`;
+                await textarea.fill(proposta);
+                textareaFilled = true;
+                break;
+              }
             }
+            if (!textareaFilled) log(`[WORKANA] Textarea nao encontrado`);
+            await randomDelay(1000, 2000);
 
             // Anexar curriculo se houver input
             const fileInput = await jobPage.$('input[type="file"]');
@@ -151,10 +171,19 @@ async function applyWorkana(browser, authContext, config) {
 
 async function doWorkanaLogin(page, email, senha) {
   log("[WORKANA] Login...");
-  await page.waitForSelector('input[type="email"], input[name="email"]', { timeout: 10000 });
-  await humanType(page, 'input[type="email"], input[name="email"]', email);
-  await humanType(page, 'input[type="password"]', senha);
-  await page.click('button[type="submit"], button:has-text("Entrar"), input[type="submit"]');
+  // Fechar modal de cookies se aparecer
+  await randomDelay(2000, 3000);
+  const cookieBtn = await page.$('button:has-text("Aceitar"), button:has-text("Accept"), button[id*="accept"]');
+  if (cookieBtn) { await cookieBtn.click(); await randomDelay(1000, 2000); }
+
+  // Preencher login
+  const emailSelectors = ['input[type="email"]', 'input[name="email"]', 'input[id*="email"]'];
+  for (const sel of emailSelectors) {
+    const el = await page.$(sel);
+    if (el) { await page.fill(sel, email); break; }
+  }
+  await page.fill('input[type="password"]', senha).catch(() => {});
+  await page.click('button[type="submit"], button:has-text("Entrar"), input[type="submit"]').catch(() => {});
   await randomDelay(4000, 6000);
 }
 

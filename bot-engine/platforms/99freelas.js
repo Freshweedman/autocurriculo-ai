@@ -138,10 +138,22 @@ async function apply99Freelas(browser, authContext, config) {
 
 async function do99FreelasLogin(page, email, senha) {
   log("[99FREELAS] Login...");
-  await page.waitForSelector('input[type="email"], input[name="email"]', { timeout: 10000 });
-  await humanType(page, 'input[type="email"], input[name="email"]', email);
-  await humanType(page, 'input[type="password"]', senha);
-  await page.click('button[type="submit"], button:has-text("Entrar")');
+  // Fechar modal de cookies
+  await randomDelay(2000, 3000);
+  const cookieBtn = await page.$('button:has-text("Aceitar"), button:has-text("Accept"), button[id*="accept"]');
+  if (cookieBtn) { await cookieBtn.click(); await randomDelay(1000, 2000); }
+
+  // Tenta varios seletores sem waitForSelector rigido
+  const emailSelectors = ['input[type="email"]', 'input[name="email"]', 'input[id*="email"]', 'input[placeholder*="email"]'];
+  let filled = false;
+  for (const sel of emailSelectors) {
+    const el = await page.$(sel);
+    if (el) { await page.fill(sel, email); filled = true; break; }
+  }
+  if (!filled) { log("[99FREELAS] Campo email nao encontrado."); return; }
+
+  await page.fill('input[type="password"]', senha).catch(() => {});
+  await page.click('button[type="submit"], button:has-text("Entrar"), button:has-text("Login")').catch(() => {});
   await randomDelay(4000, 6000);
 }
 
