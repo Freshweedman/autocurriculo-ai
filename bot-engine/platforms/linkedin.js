@@ -145,14 +145,26 @@ async function applyLinkedIn(browser, authContext, config) {
 
 async function doLinkedInLogin(page, email, senha) {
   log("[LINKEDIN] Login email/senha...");
-  await page.waitForSelector("#username", { timeout: 10000 });
-  await page.fill("#username", "");
-  await humanType(page, "#username", email);
-  await randomDelay(1000, 2000);
-  await page.fill("#password", "");
-  await humanType(page, "#password", senha);
-  await randomDelay(500, 1000);
-  await page.click('button[type="submit"]');
+  // Tenta varios seletores — LinkedIn muda o layout
+  const emailSelectors = ["#username", 'input[name="session_key"]', 'input[autocomplete="username"]', 'input[type="email"]'];
+  let filled = false;
+  for (const sel of emailSelectors) {
+    const el = await page.$(sel);
+    if (el) {
+      await page.fill(sel, email);
+      filled = true;
+      break;
+    }
+  }
+  if (!filled) { log("[LINKEDIN] Campo email nao encontrado."); return; }
+
+  const senhaSelectors = ["#password", 'input[name="session_password"]', 'input[type="password"]'];
+  for (const sel of senhaSelectors) {
+    const el = await page.$(sel);
+    if (el) { await page.fill(sel, senha); break; }
+  }
+
+  await page.click('button[type="submit"]').catch(() => {});
   await randomDelay(5000, 8000);
 }
 

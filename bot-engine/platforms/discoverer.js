@@ -13,6 +13,7 @@ async function discoverCareerPages(browser, config) {
   const context = await browser.newContext({ viewport: { width: 1366, height: 768 } });
   const page = await context.newPage();
   const urls = [];
+  let careerUrls = [];
 
   // Multiple search queries to maximize discovery
   const queries = [
@@ -67,7 +68,7 @@ async function discoverCareerPages(browser, config) {
     log(`[DISCOVER] Total: ${urls.length} URLs unicas descobertas`);
 
     // Filter URLs likely to have "Trabalhe Conosco" / career pages
-    const careerUrls = urls.filter((url) => {
+    careerUrls = urls.filter((url) => {
       const lower = url.toLowerCase();
       return (
         lower.includes("trabalhe-conosco") ||

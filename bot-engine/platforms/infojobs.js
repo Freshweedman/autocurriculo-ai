@@ -133,19 +133,14 @@ async function applyInfoJobs(browser, authContext, config) {
 async function doInfoJobsLogin(page, email, senha) {
   log("[INFOJOBS] Login email/senha...");
   await page.waitForSelector('input[type="email"], input[name*="email"]', { timeout: 10000 });
-  const emailInput = await page.$('input[type="email"], input[name*="email"]');
-  const senhaInput = await page.$('input[type="password"]');
-  if (emailInput && senhaInput) {
-    await emailInput.click();
-    await humanType(page, emailInput, email);
-    await senhaInput.click();
-    await humanType(page, senhaInput, senha);
-    const loginBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Entrar")');
-    if (loginBtn) {
-      await loginBtn.click();
-      await page.waitForURL("**/infojobs.com.br/**", { timeout: 15000 }).catch(() => {});
-      await randomDelay(3000, 5000);
-    }
+  // Usa fill direto em vez de humanType para evitar erro de tipo
+  await page.fill('input[type="email"], input[name*="email"]', email);
+  await page.fill('input[type="password"]', senha);
+  const loginBtn = await page.$('button[type="submit"], input[type="submit"], button:has-text("Entrar")');
+  if (loginBtn) {
+    await loginBtn.click();
+    await page.waitForURL("**/infojobs.com.br/**", { timeout: 15000 }).catch(() => {});
+    await randomDelay(3000, 5000);
   }
 }
 
