@@ -16,8 +16,9 @@ async function applyVagas(browser, config) {
 
   try {
     // Build search URL
-    const searchQuery = encodeURIComponent(cargo || "marketing");
-    const cityQuery = cidade ? `&onde=${encodeURIComponent(cidade)}` : "";
+    const cargoSlug = (cargo || "marketing").toLowerCase().replace(/\s+/g, "-");
+    const searchQuery = encodeURIComponent(cargoSlug);
+    const cityQuery = cidade ? `?onde=${encodeURIComponent(cidade)}` : "";
     const searchUrl = `https://www.vagas.com.br/vagas-de-${searchQuery}${cityQuery}`;
 
     log(`[VAGAS] Buscando: ${searchUrl}`);
