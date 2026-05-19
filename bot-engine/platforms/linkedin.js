@@ -52,7 +52,6 @@ async function applyLinkedIn(browser, authContext, config) {
         return results;
       }
     }
-
     // Search
     const searchQuery = encodeURIComponent(`${cargo || "marketing"}${cidade ? ` ${cidade}` : ""} Brazil`);
     await page.goto(`https://www.linkedin.com/jobs/search/?keywords=${searchQuery}&location=Brazil&f_E=2`, {
@@ -145,23 +144,50 @@ async function applyLinkedIn(browser, authContext, config) {
 
 async function doLinkedInLogin(page, email, senha) {
   log("[LINKEDIN] Login email/senha...");
-  // Tenta varios seletores — LinkedIn muda o layout
-  const emailSelectors = ["#username", 'input[name="session_key"]', 'input[autocomplete="username"]', 'input[type="email"]'];
+
+  // Fechar modal de cookies se aparecer
+  await randomDelay(2000, 3000);
+  const cookieBtn = await page.$('button[action-type="ACCEPT"], button:has-text("Aceitar"), button:has-text("Accept all")');
+  if (cookieBtn) { await cookieBtn.click(); await randomDelay(1000, 2000); }
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await randomDelay(500, 1000);
+
+  // Tenta varios seletores e forca visibilidade via JS
+  const emailSelectors = [
+    '#username',
+    'input[name="session_key"]',
+    'input[autocomplete="username"]',
+    'input[type="email"]',
+    'input[id*="username"]',
+  ];
+
   let filled = false;
   for (const sel of emailSelectors) {
-    const el = await page.$(sel);
-    if (el) {
-      await page.fill(sel, email);
-      filled = true;
-      break;
-    }
+    try {
+      const el = await page.$(sel);
+      if (el) {
+        await page.evaluate((s) => {
+          const el = document.querySelector(s);
+          if (el) { el.style.display = 'block'; el.style.visibility = 'visible'; el.style.opacity = '1'; }
+        }, sel);
+        await randomDelay(300, 600);
+        await page.fill(sel, email);
+        filled = true;
+        log(`[LINKEDIN] Email preenchido com seletor: ${sel}`);
+        break;
+      }
+    } catch (_) {}
   }
+
   if (!filled) { log("[LINKEDIN] Campo email nao encontrado."); return; }
 
   const senhaSelectors = ["#password", 'input[name="session_password"]', 'input[type="password"]'];
   for (const sel of senhaSelectors) {
-    const el = await page.$(sel);
-    if (el) { await page.fill(sel, senha); break; }
+    try {
+      const el = await page.$(sel);
+      if (el) { await page.fill(sel, senha); break; }
+    } catch (_) {}
   }
 
   await page.click('button[type="submit"]').catch(() => {});
