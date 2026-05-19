@@ -90,9 +90,11 @@ async function fetchUserProfiles() {
 }
 
 async function downloadCurriculo(userId) {
+  // Usa service role key para acessar storage privado
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
   const resp = await fetch(
     `${SUPABASE_URL}/storage/v1/object/curriculos/${userId}/curriculo.pdf`,
-    { headers: { apikey: SUPABASE_ANON_KEY } }
+    { headers: { apikey: key, Authorization: `Bearer ${key}` } }
   );
 
   if (!resp.ok) {
