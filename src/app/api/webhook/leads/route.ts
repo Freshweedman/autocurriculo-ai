@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
       site: lead.site || null,
       email: lead.email || null,
       cidade: lead.cidade || null,
+      fonte: lead.fonte || null,
+      tipo: lead.tipo || null,
     });
   }
 

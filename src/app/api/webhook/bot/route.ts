@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
         user_id: app.user_id,
         empresa: app.empresa,
         vaga: app.vaga,
+        vaga_url: app.vaga_url || null,
         plataforma: app.plataforma,
         status: app.status,
       })

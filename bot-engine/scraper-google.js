@@ -2,12 +2,10 @@ const { randomDelay } = require("./utils/delays");
 const { log } = require("./utils/logger");
 
 /**
- * Google Business + Leads Scraper v2
+ * Google Business + Leads Scraper v3
  *
- * Busca empresas e contatos via:
- *  1. Google Search organico (snippets com telefone/email)
- *  2. Google Maps (empresas locais com telefone direto)
- *  3. Queries especificas para freelancer (agencias que contratam PJ/freelancer)
+ * Foco: empresas que CONTRATAM gestor de trafego/marketing
+ * Nao coleta: freelancers oferecendo servico, plataformas de emprego
  */
 async function scrapeGoogleLeads(browser, config) {
   const { cargo, cidade } = config;
@@ -20,58 +18,72 @@ async function scrapeGoogleLeads(browser, config) {
   const leads = [];
   const seenEmpresas = new Set();
 
-  // ── Queries Google Search ──────────────────────────────────────────────────
   const cargoBase = cargo || "marketing digital";
   const loc = cidade || "Brasil";
 
+  // ── Queries focadas em EMPRESAS QUE CONTRATAM ─────────────────────────────
   const searchQueries = [
-    // Empresas CLT
-    `empresa ${cargoBase} ${loc} contato telefone`,
-    `agencia ${cargoBase} ${loc} site:com.br`,
-    `empresa contratando ${cargoBase} ${loc}`,
-    `"gestor de trafego" OR "marketing digital" empresa ${loc} contato`,
+    // Agencias de marketing que contratam
+    `agencia marketing digital ${loc} "fale conosco" contato`,
+    `agencia trafego pago ${loc} site:com.br contato`,
+    `empresa marketing digital ${loc} equipe contato email`,
+    `agencia google ads facebook ads ${loc} contato`,
 
-    // Freelancer / PJ
-    `empresa contratando freelancer ${cargoBase} ${loc}`,
-    `agencia marketing digital ${loc} freelancer PJ`,
-    `"trabalho remoto" ${cargoBase} ${loc} contato`,
-    `startup ${cargoBase} ${loc} contratando`,
-    `"prestador de servico" ${cargoBase} ${loc}`,
+    // E-commerces e empresas que precisam de gestor
+    `ecommerce ${loc} marketing digital contato`,
+    `loja online ${loc} "gestor de trafego" contato`,
+    `startup ${loc} marketing performance contato`,
+    `empresa e-commerce ${loc} "marketing digital" email`,
 
-    // Contatos diretos
-    `${cargoBase} ${loc} "fale conosco" email`,
-    `agencia publicidade ${loc} contato email telefone`,
-    `empresa e-commerce ${loc} marketing contato`,
+    // Empresas com vagas abertas
+    `empresa ${loc} "vaga" "${cargoBase}" contato`,
+    `"contratamos" "${cargoBase}" ${loc}`,
+    `"procuramos" "gestor de trafego" OR "marketing digital" ${loc}`,
+
+    // Agencias especificas
+    `agencia performance ${loc} contato telefone`,
+    `agencia social media ${loc} contato`,
+    `consultoria marketing digital ${loc} email`,
   ];
 
+  // Dominios a ignorar (plataformas de emprego, freelancers oferecendo servico)
+  const dominiosIgnorar = [
+    "linkedin.com", "indeed.com", "catho.com", "infojobs.com",
+    "vagas.com", "trabalhabrasil.com", "sine.com", "empregoligado.com",
+    "workana.com", "99freelas.com", "getninjas.com", "freelancer.com",
+    "upwork.com", "fiverr.com", "trampos.co", "glassdoor.com",
+    "gupy.io", "kenoby.com", "abler.com.br",
+    "youtube.com", "facebook.com", "instagram.com", "twitter.com",
+    "reddit.com", "quora.com", "medium.com", "wikipedia.org",
+  ];
+
+  function deveIgnorar(url) {
+    return dominiosIgnorar.some(d => url.includes(d));
+  }
+
   try {
-    // ── 1. Google Search organico ────────────────────────────────────────────
-    log(`[GOOGLE] Iniciando scraping de leads (${searchQueries.length} queries)...`);
+    log(`[GOOGLE] Buscando empresas que contratam (${searchQueries.length} queries)...`);
 
     for (const query of searchQueries) {
       try {
         log(`[GOOGLE] Query: "${query}"`);
-        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=pt-BR&num=20`;
+        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(query)}&hl=pt-BR&num=10`;
         await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
         await randomDelay(2000, 4000);
 
         const results = await page.evaluate(() => {
           const items = [];
-          // Blocos de resultado organico
           const blocks = document.querySelectorAll("div.g, div[data-hveid], div.MjjYud > div");
           blocks.forEach((block) => {
             const titleEl = block.querySelector("h3");
             const linkEl  = block.querySelector("a[href^='http']");
             const snippet = block.querySelector("div.VwiC3b, span.aCOpRe, div[data-sncf]")?.textContent || "";
-
             if (!titleEl || !linkEl) return;
             const title = titleEl.textContent || "";
             const link  = linkEl.getAttribute("href") || "";
             if (!link.startsWith("http") || link.includes("google.com")) return;
 
-            // Telefone brasileiro: (11) 99999-9999 ou 11 9999-9999
             const phoneMatch = snippet.match(/(\(?\d{2}\)?\s?\d{4,5}[-\s]?\d{4})/);
-            // Email
             const emailMatch = snippet.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/);
 
             items.push({
@@ -87,63 +99,68 @@ async function scrapeGoogleLeads(browser, config) {
 
         for (const r of results) {
           if (!r.empresa || seenEmpresas.has(r.empresa)) continue;
+          if (deveIgnorar(r.site)) continue;
+          // Ignora resultados que parecem freelancers oferecendo servico
+          const snippetLower = r.snippet.toLowerCase();
+          if (snippetLower.includes("ofereço") || snippetLower.includes("oferecer") ||
+              snippetLower.includes("meu servico") || snippetLower.includes("meu trabalho")) continue;
+
           seenEmpresas.add(r.empresa);
-          leads.push({ ...r, fonte: "google_search" });
+          leads.push({ ...r, fonte: "google_search", tipo: "empresa_contratante" });
         }
 
-        log(`[GOOGLE] +${results.length} leads (total: ${leads.length})`);
-        await randomDelay(3000, 6000);
+        log(`[GOOGLE] +${results.length} resultados filtrados (total: ${leads.length})`);
+        await randomDelay(3000, 5000);
 
-        // Anti-captcha: pausa maior a cada 4 queries
         if (searchQueries.indexOf(query) % 4 === 3) {
           log("[GOOGLE] Pausa anti-captcha...");
-          await randomDelay(8000, 15000);
+          await randomDelay(8000, 12000);
         }
       } catch (queryErr) {
-        log(`[GOOGLE] Erro na query: ${queryErr.message}`);
+        log(`[GOOGLE] Erro: ${queryErr.message}`);
       }
     }
 
-    // ── 2. Google Maps (empresas locais com telefone) ────────────────────────
+    // ── Google Maps — agencias locais ────────────────────────────────────────
     if (cidade) {
-      log(`[GOOGLE MAPS] Buscando empresas locais em ${cidade}...`);
+      log(`[GOOGLE MAPS] Buscando agencias em ${cidade}...`);
       const mapsQueries = [
         `agencia marketing digital ${cidade}`,
-        `empresa publicidade ${cidade}`,
-        `agencia social media ${cidade}`,
+        `agencia trafego pago ${cidade}`,
+        `agencia publicidade ${cidade}`,
+        `empresa marketing ${cidade}`,
+        `consultoria marketing digital ${cidade}`,
       ];
 
       for (const mq of mapsQueries) {
         try {
-          const mapsUrl = `https://www.google.com/maps/search/${encodeURIComponent(mq)}`;
-          await page.goto(mapsUrl, { waitUntil: "domcontentloaded", timeout: 25000 });
-          await randomDelay(4000, 7000);
+          await page.goto(`https://www.google.com/maps/search/${encodeURIComponent(mq)}`, {
+            waitUntil: "domcontentloaded", timeout: 25000,
+          });
+          await randomDelay(4000, 6000);
 
-          // Scroll para carregar mais resultados
           for (let s = 0; s < 3; s++) {
             await page.evaluate(() => {
               const panel = document.querySelector('[role="feed"]');
               if (panel) panel.scrollTop += 800;
             });
-            await randomDelay(2000, 3000);
+            await randomDelay(1500, 2500);
           }
 
           const mapResults = await page.evaluate(() => {
             const items = [];
-            // Cards do Maps
-            const cards = document.querySelectorAll('[data-result-index], .Nv2PK, a[href*="/maps/place/"]');
+            const cards = document.querySelectorAll('[data-result-index], .Nv2PK');
             cards.forEach((card) => {
               const name  = card.querySelector('.qBF1Pd, .fontHeadlineSmall, h3')?.textContent || "";
-              const phone = card.querySelector('[data-tooltip*="Ligar"], [aria-label*="Telefone"]')?.textContent ||
-                            card.querySelector('.UsdlK')?.textContent || "";
+              const phone = card.querySelector('[data-tooltip*="Ligar"], [aria-label*="Telefone"], .UsdlK')?.textContent || "";
               const addr  = card.querySelector('.W4Efsd, .fontBodyMedium')?.textContent || "";
-
+              const site  = card.querySelector('a[data-value="Website"]')?.getAttribute("href") || "";
               if (name && name.length > 2) {
                 items.push({
                   empresa: name.trim().slice(0, 80),
-                  telefone: phone.replace(/\D/g, "").length >= 8 ? phone.trim() : "",
+                  telefone: phone.replace(/[^\d\s\(\)\-\+]/g, "").trim().slice(0, 20),
                   cidade: addr.trim().slice(0, 60),
-                  site: "",
+                  site: site || "",
                   email: "",
                 });
               }
@@ -154,69 +171,18 @@ async function scrapeGoogleLeads(browser, config) {
           for (const r of mapResults) {
             if (!r.empresa || seenEmpresas.has(r.empresa)) continue;
             seenEmpresas.add(r.empresa);
-            leads.push({ ...r, fonte: "google_maps" });
+            leads.push({ ...r, fonte: "google_maps", tipo: "agencia" });
           }
 
-          log(`[GOOGLE MAPS] +${mapResults.length} leads do Maps (total: ${leads.length})`);
-          await randomDelay(5000, 9000);
-        } catch (mapsErr) {
-          log(`[GOOGLE MAPS] Erro: ${mapsErr.message}`);
+          log(`[GOOGLE MAPS] +${mapResults.length} agencias (total: ${leads.length})`);
+          await randomDelay(5000, 8000);
+        } catch (e) {
+          log(`[GOOGLE MAPS] Erro: ${e.message}`);
         }
       }
     }
 
-    // ── 3. Busca especifica de freelancer ────────────────────────────────────
-    log("[GOOGLE] Buscando contatos para freelancer...");
-    const freelancerQueries = [
-      `"contratamos freelancer" ${cargoBase} ${loc} email`,
-      `"trabalho remoto" ${cargoBase} ${loc} "envie seu curriculo"`,
-      `agencia marketing ${loc} "banco de talentos" email`,
-      `empresa ${cargoBase} ${loc} "vagas para freelancer"`,
-    ];
-
-    for (const fq of freelancerQueries) {
-      try {
-        const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(fq)}&hl=pt-BR&num=10`;
-        await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
-        await randomDelay(2000, 4000);
-
-        const results = await page.evaluate(() => {
-          const items = [];
-          const blocks = document.querySelectorAll("div.g, div[data-hveid]");
-          blocks.forEach((block) => {
-            const titleEl = block.querySelector("h3");
-            const linkEl  = block.querySelector("a[href^='http']");
-            const snippet = block.querySelector("div.VwiC3b, span.aCOpRe")?.textContent || "";
-            if (!titleEl || !linkEl) return;
-            const link = linkEl.getAttribute("href") || "";
-            if (!link.startsWith("http") || link.includes("google.com")) return;
-            const emailMatch = snippet.match(/([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/);
-            const phoneMatch = snippet.match(/(\(?\d{2}\)?\s?\d{4,5}[-\s]?\d{4})/);
-            items.push({
-              empresa: (titleEl.textContent || "").split(" - ")[0].trim().slice(0, 80),
-              site: link,
-              email: emailMatch ? emailMatch[1] : "",
-              telefone: phoneMatch ? phoneMatch[1] : "",
-              snippet: snippet.slice(0, 200),
-            });
-          });
-          return items;
-        });
-
-        for (const r of results) {
-          if (!r.empresa || seenEmpresas.has(r.empresa)) continue;
-          seenEmpresas.add(r.empresa);
-          leads.push({ ...r, fonte: "google_freelancer" });
-        }
-
-        log(`[GOOGLE FREELANCER] +${results.length} leads (total: ${leads.length})`);
-        await randomDelay(4000, 7000);
-      } catch (fqErr) {
-        log(`[GOOGLE FREELANCER] Erro: ${fqErr.message}`);
-      }
-    }
-
-    log(`[GOOGLE] Scraping finalizado. Total: ${leads.length} leads unicos`);
+    log(`[GOOGLE] Total: ${leads.length} empresas/agencias coletadas`);
 
   } catch (err) {
     log(`[ERRO] Google scraper: ${err.message}`);
