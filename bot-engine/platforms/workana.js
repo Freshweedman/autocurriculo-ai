@@ -148,29 +148,51 @@ async function applyWorkana(browser, authContext, config) {
           if (propBtn) {
             log(`[WORKANA] Botao proposta encontrado`);
             await propBtn.click();
-            await randomDelay(2000, 4000);
+            await randomDelay(3000, 5000); // espera mais para o modal abrir
 
-            // Preencher proposta — tenta varios seletores de textarea
+            // O modal de proposta pode demorar para aparecer
             const textareaSelectors = [
               'textarea[name*="proposal"]',
               'textarea[name*="message"]',
               'textarea[name*="description"]',
+              'textarea[name*="cover"]',
               'textarea[placeholder*="proposta"]',
               'textarea[placeholder*="descri"]',
               'textarea[placeholder*="proposal"]',
+              'textarea[placeholder*="cover"]',
+              'textarea[placeholder*="mensagem"]',
+              'textarea[placeholder*="message"]',
+              // Seletores mais genericos — pega qualquer textarea visivel no modal
+              '.modal textarea',
+              '[role="dialog"] textarea',
+              'form textarea',
               'textarea',
             ];
+
             let textareaFilled = false;
-            for (const sel of textareaSelectors) {
-              const textarea = await jobPage.$(sel);
-              if (textarea) {
-                const proposta = `Ola! Sou especialista em ${cargo || "marketing digital"} com 6 anos de experiencia. Tenho interesse neste projeto e posso entregar resultados de qualidade dentro do prazo. Vamos conversar sobre os detalhes?`;
-                await textarea.fill(proposta);
-                textareaFilled = true;
-                break;
+            // Tenta por ate 10 segundos
+            for (let tentativa = 0; tentativa < 5 && !textareaFilled; tentativa++) {
+              for (const sel of textareaSelectors) {
+                try {
+                  const textarea = await jobPage.$(sel);
+                  if (textarea) {
+                    const isVisible = await textarea.isVisible();
+                    if (isVisible) {
+                      const proposta = `Ola! Sou especialista em ${cargo || "marketing digital"} com 6 anos de experiencia em gestao de trafego pago (Facebook Ads, Google Ads, TikTok Ads). Tenho interesse neste projeto e posso entregar resultados de qualidade dentro do prazo. Vamos conversar sobre os detalhes?`;
+                      await textarea.fill(proposta);
+                      textareaFilled = true;
+                      log(`[WORKANA] Textarea preenchido com seletor: ${sel}`);
+                      break;
+                    }
+                  }
+                } catch (_) {}
               }
+              if (!textareaFilled) await randomDelay(2000, 3000);
             }
-            if (!textareaFilled) log(`[WORKANA] Textarea nao encontrado`);
+
+            if (!textareaFilled) {
+              log(`[WORKANA] Textarea nao encontrado apos 5 tentativas`);
+            }
             await randomDelay(1000, 2000);
 
             // Anexar curriculo se houver input
@@ -180,8 +202,8 @@ async function applyWorkana(browser, authContext, config) {
               await randomDelay(1000, 2000);
             }
 
-            const submitBtn = await jobPage.$('button[type="submit"], button:has-text("Enviar"), button:has-text("Confirmar proposta")');
-            if (submitBtn) {
+            const submitBtn = await jobPage.$('button[type="submit"], button:has-text("Enviar"), button:has-text("Confirmar proposta"), button:has-text("Send"), .modal button[type="submit"], [role="dialog"] button[type="submit"]');
+            if (submitBtn && await submitBtn.isVisible()) {
               await submitBtn.click();
               applied++;
               results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop() || `projeto-${applied}`, plataforma: "Workana", status: "enviado" });
