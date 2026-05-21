@@ -2,6 +2,7 @@
 
 import { supabase } from "@/lib/supabase/client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 interface Metrics {
   today: number;
@@ -10,17 +11,18 @@ interface Metrics {
   leads: number;
   botAtivo: boolean;
   limiteDiario: number;
+  cargo: string;
 }
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<Metrics>({
-    today: 0, semana: 0, mes: 0, leads: 0, botAtivo: false, limiteDiario: 5,
+    today: 0, semana: 0, mes: 0, leads: 0, botAtivo: false, limiteDiario: 5, cargo: "",
   });
   const [loading, setLoading] = useState(true);
+  const [rodando, setRodando] = useState(false);
+  const [botMsg, setBotMsg] = useState("");
 
-  useEffect(() => {
-    loadMetrics();
-  }, []);
+  useEffect(() => { loadMetrics(); }, []);
 
   const loadMetrics = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -46,30 +48,68 @@ export default function DashboardPage() {
       leads: leadsCount || 0,
       botAtivo: profile?.bot_ativo ?? false,
       limiteDiario: profile?.limite_diario ?? 5,
+      cargo: profile?.cargo || "gestor de trafego",
     });
     setLoading(false);
   };
 
-  if (loading) {
-    return <div className="text-muted">Carregando...</div>;
-  }
+  const handleRodarBot = async () => {
+    setRodando(true);
+    setBotMsg("");
+    try {
+      const res = await fetch("/api/run-bot", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setBotMsg("✓ Bot iniciado! Candidaturas aparecem aqui em ~5 minutos.");
+      } else {
+        setBotMsg(`Erro: ${data.error}`);
+      }
+    } catch {
+      setBotMsg("Erro ao conectar. Tente pelo GitHub Actions.");
+    }
+    setRodando(false);
+    setTimeout(() => setBotMsg(""), 8000);
+  };
+
+  if (loading) return <div className="text-muted">Carregando...</div>;
 
   return (
     <div>
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700 }}>Dashboard</h1>
-        <p className="text-muted" style={{ marginTop: 4 }}>
-          {metrics.botAtivo ? "Bot ativo - enviando curriculos automaticamente" : "Bot pausado - ative nas configuracoes"}
-        </p>
+      <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: 24, fontWeight: 700 }}>Dashboard</h1>
+          <p className="text-muted" style={{ marginTop: 4 }}>
+            Buscando: <strong style={{ color: "var(--text)" }}>{metrics.cargo}</strong>
+          </p>
+        </div>
+        <button
+          className="btn-primary"
+          onClick={handleRodarBot}
+          disabled={rodando}
+          style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px" }}
+        >
+          {rodando ? (
+            <><span className="animate-spin" style={{ display: "inline-block" }}>⟳</span> Iniciando...</>
+          ) : (
+            <><span>▶</span> Rodar Bot Agora</>
+          )}
+        </button>
       </div>
 
+      {botMsg && (
+        <div style={{
+          marginBottom: 20, padding: "12px 16px", borderRadius: 8,
+          background: botMsg.startsWith("✓") ? "rgba(34,197,94,0.1)" : "rgba(239,68,68,0.1)",
+          border: `1px solid ${botMsg.startsWith("✓") ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+          color: botMsg.startsWith("✓") ? "var(--success)" : "var(--danger)",
+          fontSize: 14,
+        }}>
+          {botMsg}
+        </div>
+      )}
+
       {/* Status do Bot */}
-      <div className="card" style={{
-        marginBottom: 24,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-      }}>
+      <div className="card" style={{ marginBottom: 24, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
             width: 12, height: 12, borderRadius: "50%",
@@ -77,88 +117,104 @@ export default function DashboardPage() {
             boxShadow: metrics.botAtivo ? "0 0 12px rgba(34,197,94,0.4)" : "none",
           }} />
           <div>
-            <div style={{ fontWeight: 600 }}>Bot {metrics.botAtivo ? "Online" : "Offline"}</div>
+            <div style={{ fontWeight: 600 }}>Bot {metrics.botAtivo ? "Ativo" : "Pausado"}</div>
             <div style={{ fontSize: 13 }} className="text-muted">
-              Limite diario: {metrics.limiteDiario} curriculos
+              {metrics.botAtivo ? `Roda automaticamente Seg-Sex 9h · Limite: ${metrics.limiteDiario}/dia` : "Ative nas configurações para rodar automaticamente"}
             </div>
           </div>
         </div>
-        <a href="/dashboard/configuracoes" className="btn-outline" style={{ textDecoration: "none" }}>
+        <Link href="/dashboard/configuracoes" className="btn-outline" style={{ textDecoration: "none" }}>
           Configurar
-        </a>
+        </Link>
       </div>
 
-      {/* Metric Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginBottom: 32 }}>
-        <MetricCard label="Candidaturas Hoje" value={metrics.today} />
-        <MetricCard label="Ultimos 7 dias" value={metrics.semana} />
-        <MetricCard label="Ultimos 30 dias" value={metrics.mes} />
-        <MetricCard label="Leads Coletados" value={metrics.leads} />
+      {/* Métricas */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 16, marginBottom: 24 }}>
+        <MetricCard label="Candidaturas Hoje" value={metrics.today} cor="var(--primary)" link="/dashboard/candidaturas" />
+        <MetricCard label="Últimos 7 dias" value={metrics.semana} cor="#6366f1" link="/dashboard/candidaturas" />
+        <MetricCard label="Últimos 30 dias" value={metrics.mes} cor="#8b5cf6" link="/dashboard/candidaturas" />
+        <MetricCard label="Leads Coletados" value={metrics.leads} cor="var(--success)" link="/dashboard/leads" />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <div className="card">
-          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Proximos passos</h3>
-          <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
-            <li style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <span className="badge badge-warning">1</span>
+      {/* Ações rápidas */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 16, marginBottom: 24 }}>
+        <AcaoCard
+          icon="🎯"
+          titulo="Prospecção Ativa"
+          descricao="Busque empresas e envie propostas direto"
+          href="/dashboard/prospeccao"
+          cor="#f59e0b"
+        />
+        <AcaoCard
+          icon="📋"
+          titulo="Ver Candidaturas"
+          descricao={`${metrics.mes} candidaturas este mês`}
+          href="/dashboard/candidaturas"
+          cor="var(--primary)"
+        />
+        <AcaoCard
+          icon="📞"
+          titulo="Leads para Contatar"
+          descricao={`${metrics.leads} empresas coletadas`}
+          href="/dashboard/leads"
+          cor="var(--success)"
+        />
+        <AcaoCard
+          icon="⚙️"
+          titulo="Configurações"
+          descricao="Plataformas, cargo e currículo"
+          href="/dashboard/configuracoes"
+          cor="var(--text-muted)"
+        />
+      </div>
+
+      {/* Como funciona */}
+      <div className="card">
+        <h3 style={{ fontSize: 15, fontWeight: 600, marginBottom: 16 }}>Como maximizar resultados</h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 12 }}>
+          {[
+            { n: "1", t: "Rodar o bot", d: "Clique em 'Rodar Bot Agora' ou aguarde 9h" },
+            { n: "2", t: "Prospecção ativa", d: "Use a ferramenta de prospecção para contatar agências" },
+            { n: "3", t: "Contatar leads", d: "Envie email/WhatsApp para as empresas coletadas" },
+            { n: "4", t: "Acompanhar", d: "Veja candidaturas e status em tempo real" },
+          ].map(s => (
+            <div key={s.n} style={{ display: "flex", gap: 10 }}>
+              <span className="badge badge-warning" style={{ flexShrink: 0, height: "fit-content" }}>{s.n}</span>
               <div>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>Upload do curriculo</div>
-                <div className="text-muted" style={{ fontSize: 13 }}>Envie seu curriculo em PDF</div>
+                <div style={{ fontWeight: 500, fontSize: 14 }}>{s.t}</div>
+                <div className="text-muted" style={{ fontSize: 12, marginTop: 2 }}>{s.d}</div>
               </div>
-            </li>
-            <li style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <span className="badge badge-warning">2</span>
-              <div>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>Configurar cargo e cidade</div>
-                <div className="text-muted" style={{ fontSize: 13 }}>Defina o cargo e localizacao da busca</div>
-              </div>
-            </li>
-            <li style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <span className="badge badge-warning">3</span>
-              <div>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>Ativar bot</div>
-                <div className="text-muted" style={{ fontSize: 13 }}>Ligue o bot e ele roda todo dia as 9h</div>
-              </div>
-            </li>
-          </ul>
-        </div>
-        <div className="card">
-          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Como funciona</h3>
-          <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 12 }}>
-            <li style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <span style={{ color: "var(--success)", fontSize: 16 }}>&#10003;</span>
-              <div>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>GitHub Actions</div>
-                <div className="text-muted" style={{ fontSize: 13 }}>Roda em servidor externo, nao usa sua maquina</div>
-              </div>
-            </li>
-            <li style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <span style={{ color: "var(--success)", fontSize: 16 }}>&#10003;</span>
-              <div>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>Playwright</div>
-                <div className="text-muted" style={{ fontSize: 13 }}>Simula um navegador real, mais discreto</div>
-              </div>
-            </li>
-            <li style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-              <span style={{ color: "var(--success)", fontSize: 16 }}>&#10003;</span>
-              <div>
-                <div style={{ fontWeight: 500, fontSize: 14 }}>Delay humano</div>
-                <div className="text-muted" style={{ fontSize: 13 }}>Intervalos aleatorios para evitar deteccao</div>
-              </div>
-            </li>
-          </ul>
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: number }) {
+function MetricCard({ label, value, cor, link }: { label: string; value: number; cor: string; link: string }) {
   return (
-    <div className="card" style={{ textAlign: "center" }}>
-      <div style={{ fontSize: 32, fontWeight: 700, color: "var(--primary)" }}>{value}</div>
-      <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>{label}</div>
-    </div>
+    <Link href={link} style={{ textDecoration: "none" }}>
+      <div className="card" style={{ textAlign: "center", cursor: "pointer", transition: "border-color 0.2s" }}
+        onMouseEnter={e => (e.currentTarget.style.borderColor = cor)}
+        onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}>
+        <div style={{ fontSize: 32, fontWeight: 700, color: cor }}>{value}</div>
+        <div className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>{label}</div>
+      </div>
+    </Link>
+  );
+}
+
+function AcaoCard({ icon, titulo, descricao, href, cor }: { icon: string; titulo: string; descricao: string; href: string; cor: string }) {
+  return (
+    <Link href={href} style={{ textDecoration: "none" }}>
+      <div className="card" style={{ cursor: "pointer", transition: "border-color 0.2s, background 0.2s" }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = cor; e.currentTarget.style.background = "var(--bg-card-hover)"; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "var(--bg-card)"; }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>{icon}</div>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>{titulo}</div>
+        <div className="text-muted" style={{ fontSize: 12 }}>{descricao}</div>
+      </div>
+    </Link>
   );
 }

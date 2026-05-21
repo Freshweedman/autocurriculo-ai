@@ -5,18 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: "grid" },
-  { href: "/dashboard/candidaturas", label: "Candidaturas", icon: "file" },
-  { href: "/dashboard/leads", label: "Leads", icon: "search" },
-  { href: "/dashboard/configuracoes", label: "Configuracoes", icon: "gear" },
+  { href: "/dashboard", label: "Dashboard", icon: "▦" },
+  { href: "/dashboard/prospeccao", label: "Prospecção", icon: "🎯" },
+  { href: "/dashboard/candidaturas", label: "Candidaturas", icon: "□" },
+  { href: "/dashboard/leads", label: "Leads", icon: "○" },
+  { href: "/dashboard/configuracoes", label: "Configurações", icon: "⚙" },
 ];
-
-const iconMap: Record<string, string> = {
-  grid: "\u25A6",
-  file: "\u25A1",
-  search: "\u25CB",
-  gear: "\u2699",
-};
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -71,7 +65,7 @@ export default function Sidebar() {
                 if (!isActive) e.currentTarget.style.background = "transparent";
               }}
             >
-              <span style={{ fontSize: 16 }}>{iconMap[item.icon]}</span>
+              <span style={{ fontSize: 16 }}>{item.icon}</span>
               {item.label}
             </Link>
           );
