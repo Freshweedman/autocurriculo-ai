@@ -351,7 +351,7 @@ async function main() {
         log("[BOT] Indeed...");
         const r = await applyIndeed(browser, authContext, {
           ...(profileIndeedCreds.session ? { session: true } : { email: profileIndeedCreds.email, senha: profileIndeedCreds.senha }),
-          cargo, cidade, curriculoPath: cvPath, limiteDiario,
+          cargo: cargoBase, cidade, curriculoPath: cvPath, limiteDiario,
         });
         allResults.push(...r);
         log(`[BOT] Indeed: ${r.length} resultados`);
