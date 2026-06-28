@@ -10,55 +10,81 @@ export async function POST(req: NextRequest) {
 
   const supabase = createAdminClient();
   const results: { id: string; empresa: string; status: string }[] = [];
+  const trintaDiasAtras = new Date(Date.now() - 30 * 86400000).toISOString();
 
   for (const app of applications) {
-    // Verificar duplicacao (mesma empresa + vaga nos ultimos 30 dias)
-    const trintaDiasAtras = new Date(Date.now() - 30 * 86400000).toISOString();
-    const { data: existente } = await supabase
-      .from("applications")
-      .select("id")
-      .eq("user_id", app.user_id)
-      .eq("empresa", app.empresa)
-      .eq("vaga", app.vaga)
-      .gte("created_at", trintaDiasAtras)
-      .limit(1);
+    try {
+      // Dedup strategy:
+      // 1. If vaga_url is present, use it as the unique key (most accurate)
+      // 2. Fallback: empresa + plataforma + same day (prevents spam runs)
+      let isDuplicate = false;
 
-    if (existente && existente.length > 0) {
-      results.push({ id: "", empresa: app.empresa, status: "duplicado" });
+      if (app.vaga_url) {
+        const { data: existente } = await supabase
+          .from("applications")
+          .select("id")
+          .eq("user_id", app.user_id)
+          .eq("vaga_url", app.vaga_url)
+          .gte("created_at", trintaDiasAtras)
+          .limit(1);
+        isDuplicate = !!(existente && existente.length > 0);
+      } else {
+        // Fallback: same empresa+vaga on same day
+        const hoje = new Date().toISOString().split("T")[0];
+        const { data: existente } = await supabase
+          .from("applications")
+          .select("id")
+          .eq("user_id", app.user_id)
+          .eq("empresa", app.empresa)
+          .eq("plataforma", app.plataforma)
+          .gte("created_at", hoje)
+          .limit(1);
+        isDuplicate = !!(existente && existente.length > 0);
+      }
 
-      await supabase.from("applications").insert({
-        user_id: app.user_id,
-        empresa: app.empresa,
-        vaga: app.vaga,
-        plataforma: app.plataforma,
-        status: "duplicado",
-      });
-      continue;
-    }
+      if (isDuplicate) {
+        results.push({ id: "", empresa: app.empresa, status: "duplicado" });
+        // Still record duplicates so user can see what was attempted
+        await supabase.from("applications").insert({
+          user_id: app.user_id,
+          empresa: app.empresa,
+          vaga: app.vaga,
+          vaga_url: app.vaga_url || null,
+          plataforma: app.plataforma,
+          status: "duplicado",
+        });
+        continue;
+      }
 
-    const { data: inserted, error } = await supabase
-      .from("applications")
-      .insert({
-        user_id: app.user_id,
-        empresa: app.empresa,
-        vaga: app.vaga,
-        vaga_url: app.vaga_url || null,
-        plataforma: app.plataforma,
-        status: app.status,
-      })
-      .select()
-      .single();
+      const { data: inserted, error } = await supabase
+        .from("applications")
+        .insert({
+          user_id: app.user_id,
+          empresa: app.empresa,
+          vaga: app.vaga,
+          vaga_url: app.vaga_url || null,
+          plataforma: app.plataforma,
+          status: app.status,
+        })
+        .select()
+        .single();
 
-    if (error) {
-      results.push({ id: "", empresa: app.empresa, status: "falhou" });
-    } else {
-      results.push({
-        id: inserted?.id || "",
-        empresa: app.empresa,
-        status: "enviado",
-      });
+      if (error) {
+        results.push({ id: "", empresa: app.empresa, status: "falhou" });
+      } else {
+        results.push({
+          id: inserted?.id || "",
+          empresa: app.empresa,
+          status: app.status,
+        });
+      }
+    } catch {
+      results.push({ id: "", empresa: app.empresa || "unknown", status: "falhou" });
     }
   }
 
-  return NextResponse.json({ ok: true, results });
+  const enviados = results.filter((r) => r.status === "enviado").length;
+  const duplicados = results.filter((r) => r.status === "duplicado").length;
+
+  return NextResponse.json({ ok: true, results, summary: { enviados, duplicados, total: results.length } });
 }

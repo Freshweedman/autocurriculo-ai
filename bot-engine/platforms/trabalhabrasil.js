@@ -83,24 +83,22 @@ async function applyTrabalhaBrasil(browser, config) {
                 await submitBtn.click();
                 applied++;
                 log(`[OK] Trabalha Brasil vaga #${applied} enviada`);
-                results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "TrabalhaBrasil", status: "enviado" });
+                results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "enviado" });
               } else {
-                results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "TrabalhaBrasil", status: "sem_submit" });
+                results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "sem_submit" });
               }
             } else {
-              // Some listings may have a redirect to external site or email application
-              results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "TrabalhaBrasil", status: "sem_file_input" });
+              results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "sem_file_input" });
             }
           } else {
-            // No direct apply button - may be an external listing
-            results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "TrabalhaBrasil", status: "nao_suportado" });
+            results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "nao_suportado" });
           }
 
           await jobPage.close();
           await randomDelay(2000, 4000);
         } catch (jobErr) {
           log(`[ERRO] Trabalha Brasil vaga: ${jobErr.message}`);
-          results.push({ empresa: "TrabalhaBrasil", vaga: href.split("/").pop() || "unknown", plataforma: "TrabalhaBrasil", status: "falhou" });
+          results.push({ empresa: "TrabalhaBrasil", vaga: href.split("/").pop() || "unknown", vaga_url: href.startsWith("http") ? href : `https://www.trabalhabrasil.com.br${href}`, plataforma: "TrabalhaBrasil", status: "falhou" });
         }
       }
 

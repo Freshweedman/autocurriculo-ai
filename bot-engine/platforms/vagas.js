@@ -82,22 +82,22 @@ async function applyVagas(browser, config) {
                 await submitBtn.click();
                 applied++;
                 log(`[OK] Vagas.com vaga #${applied} enviada`);
-                results.push({ empresa: "Vagas.com", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "Vagas", status: "enviado" });
+                results.push({ empresa: "Vagas.com", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "Vagas", status: "enviado" });
               } else {
-                results.push({ empresa: "Vagas.com", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "Vagas", status: "sem_submit" });
+                results.push({ empresa: "Vagas.com", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "Vagas", status: "sem_submit" });
               }
             } else {
-              results.push({ empresa: "Vagas.com", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "Vagas", status: "sem_file_input" });
+              results.push({ empresa: "Vagas.com", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "Vagas", status: "sem_file_input" });
             }
           } else {
-            results.push({ empresa: "Vagas.com", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "Vagas", status: "nao_suportado" });
+            results.push({ empresa: "Vagas.com", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "Vagas", status: "nao_suportado" });
           }
 
           await jobPage.close();
           await randomDelay(2000, 4000);
         } catch (jobErr) {
           log(`[ERRO] Vagas.com vaga: ${jobErr.message}`);
-          results.push({ empresa: "Vagas.com", vaga: href.split("/").pop() || "unknown", plataforma: "Vagas", status: "falhou" });
+          results.push({ empresa: "Vagas.com", vaga: href.split("/").pop() || "unknown", vaga_url: href.startsWith("http") ? href : `https://www.vagas.com.br${href}`, plataforma: "Vagas", status: "falhou" });
         }
       }
 

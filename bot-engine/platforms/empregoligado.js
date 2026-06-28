@@ -59,22 +59,22 @@ async function applyEmpregoLigado(browser, config) {
               if (submitBtn) {
                 await submitBtn.click();
                 applied++;
-                results.push({ empresa: "EmpregoLigado", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "EmpregoLigado", status: "enviado" });
+                results.push({ empresa: "EmpregoLigado", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "EmpregoLigado", status: "enviado" });
                 log(`[OK] EmpregoLigado #${applied}`);
               } else {
-                results.push({ empresa: "EmpregoLigado", vaga: jobUrl.split("/").pop(), plataforma: "EmpregoLigado", status: "sem_submit" });
+                results.push({ empresa: "EmpregoLigado", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "EmpregoLigado", status: "sem_submit" });
               }
             } else {
-              results.push({ empresa: "EmpregoLigado", vaga: jobUrl.split("/").pop(), plataforma: "EmpregoLigado", status: "sem_file_input" });
+              results.push({ empresa: "EmpregoLigado", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "EmpregoLigado", status: "sem_file_input" });
             }
           } else {
-            results.push({ empresa: "EmpregoLigado", vaga: jobUrl.split("/").pop(), plataforma: "EmpregoLigado", status: "nao_suportado" });
+            results.push({ empresa: "EmpregoLigado", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "EmpregoLigado", status: "nao_suportado" });
           }
           await jobPage.close();
           await randomDelay(2000, 4000);
         } catch (e) {
           log(`[ERRO] EmpregoLigado: ${e.message}`);
-          results.push({ empresa: "EmpregoLigado", vaga: "unknown", plataforma: "EmpregoLigado", status: "falhou" });
+          results.push({ empresa: "EmpregoLigado", vaga: "unknown", vaga_url: null, plataforma: "EmpregoLigado", status: "falhou" });
         }
       }
 

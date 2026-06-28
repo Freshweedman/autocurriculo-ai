@@ -104,19 +104,19 @@ async function applyGetNinjas(browser, authContext, config) {
             if (confirmBtn) {
               await confirmBtn.click();
               applied++;
-              results.push({ empresa: "GetNinjas", vaga: jobUrl.split("/").pop() || `oportunidade-${applied}`, plataforma: "GetNinjas", status: "enviado" });
+              results.push({ empresa: "GetNinjas", vaga: jobUrl.split("/").pop() || `oportunidade-${applied}`, vaga_url: jobUrl, plataforma: "GetNinjas", status: "enviado" });
               log(`[OK] GetNinjas #${applied}`);
             } else {
-              results.push({ empresa: "GetNinjas", vaga: jobUrl.split("/").pop(), plataforma: "GetNinjas", status: "sem_submit" });
+              results.push({ empresa: "GetNinjas", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "GetNinjas", status: "sem_submit" });
             }
           } else {
-            results.push({ empresa: "GetNinjas", vaga: jobUrl.split("/").pop(), plataforma: "GetNinjas", status: "nao_suportado" });
+            results.push({ empresa: "GetNinjas", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "GetNinjas", status: "nao_suportado" });
           }
           await jobPage.close();
           await randomDelay(3000, 6000);
         } catch (e) {
           log(`[ERRO] GetNinjas: ${e.message}`);
-          results.push({ empresa: "GetNinjas", vaga: "unknown", plataforma: "GetNinjas", status: "falhou" });
+          results.push({ empresa: "GetNinjas", vaga: "unknown", vaga_url: null, plataforma: "GetNinjas", status: "falhou" });
         }
       }
 

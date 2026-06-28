@@ -13,36 +13,21 @@ interface Application {
   created_at: string;
 }
 
-const statusBadge: Record<string, string> = {
-  enviado: "badge-success",
-  falhou: "badge-danger",
-  pendente: "badge-warning",
-  duplicado: "badge-warning",
-  sem_submit: "badge-warning",
-  sem_file_input: "badge-warning",
-  nao_suportado: "badge-warning",
+const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
+  enviado:       { label: "Enviado",        color: "#30D158", bg: "rgba(48,209,88,0.1)" },
+  falhou:        { label: "Falhou",         color: "#FF6961", bg: "rgba(255,69,58,0.1)" },
+  pendente:      { label: "Pendente",       color: "#FF9F0A", bg: "rgba(255,159,10,0.1)" },
+  duplicado:     { label: "Duplicado",      color: "#FF9F0A", bg: "rgba(255,159,10,0.1)" },
+  sem_submit:    { label: "Sem submit",     color: "#636366", bg: "rgba(99,99,102,0.1)" },
+  sem_file_input:{ label: "Sem upload",    color: "#636366", bg: "rgba(99,99,102,0.1)" },
+  nao_suportado: { label: "Não suportado", color: "#636366", bg: "rgba(99,99,102,0.1)" },
 };
 
-const statusLabel: Record<string, string> = {
-  enviado: "Enviado",
-  falhou: "Falhou",
-  pendente: "Pendente",
-  duplicado: "Duplicado",
-  sem_submit: "Sem submit",
-  sem_file_input: "Sem upload",
-  nao_suportado: "Não suportado",
-};
-
-const plataformaCor: Record<string, string> = {
-  "99Freelas": "#00b4d8",
-  Workana: "#ff6b35",
-  LinkedIn: "#0a66c2",
-  InfoJobs: "#ff6600",
-  Catho: "#00a651",
-  Indeed: "#2164f3",
-  TrabalhaBrasil: "#e63946",
-  Vagas: "#6a0dad",
-  TrabalheConosco: "#457b9d",
+const PLAT_COLOR: Record<string, string> = {
+  LinkedIn: "#0A66C2", Indeed: "#2164F3", InfoJobs: "#FF6600",
+  Catho: "#00A651", Workana: "#FF6B35", "99Freelas": "#00B4D8",
+  GetNinjas: "#E63946", Sine: "#6A0DAD", TrabalhaBrasil: "#E63946",
+  Vagas: "#6A0DAD", TrabalheConosco: "#457B9D", EmpregoLigado: "#F59E0B",
 };
 
 export default function CandidaturasPage() {
@@ -70,14 +55,13 @@ export default function CandidaturasPage() {
     setApps(data || []);
     setLoading(false);
 
-    // Pegar URL do curriculo para exibir
     const { data: urlData } = await supabase.storage
       .from("curriculos")
       .createSignedUrl(`${user.id}/curriculo.pdf`, 3600);
     if (urlData?.signedUrl) setCvUrl(urlData.signedUrl);
   };
 
-  const plataformas = ["todas", ...Array.from(new Set(apps.map(a => a.plataforma)))];
+  const plataformas = ["todas", ...Array.from(new Set(apps.map(a => a.plataforma))).sort()];
 
   const filtered = apps.filter(a => {
     const matchSearch = !search ||
@@ -94,55 +78,103 @@ export default function CandidaturasPage() {
     return d === new Date().toDateString() && a.status === "enviado";
   }).length;
 
-  if (loading) return <div className="text-muted">Carregando...</div>;
+  // Stats by platform
+  const statsByPlat = apps.filter(a => a.status === "enviado").reduce((acc, a) => {
+    acc[a.plataforma] = (acc[a.plataforma] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
+        <div className="animate-spin" style={{ width: 24, height: 24, border: "2px solid var(--border)", borderTopColor: "var(--accent)", borderRadius: "50%" }} />
+      </div>
+    );
+  }
 
   return (
-    <div>
+    <div style={{ maxWidth: 960, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700 }}>Candidaturas</h1>
-          <p className="text-muted" style={{ marginTop: 4 }}>
-            {enviadas} enviadas no total · {hoje} hoje
+          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em" }}>Candidaturas</h1>
+          <p style={{ color: "var(--text-secondary)", marginTop: 4, fontSize: 14 }}>
+            {enviadas.toLocaleString("pt-BR")} enviadas no total · {hoje} hoje
           </p>
         </div>
         {cvUrl && (
-          <a href={cvUrl} target="_blank" rel="noreferrer" className="btn-outline" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none" }}>
-            📄 Ver meu currículo
+          <a href={cvUrl} target="_blank" rel="noreferrer" className="btn-ghost" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", fontSize: 13 }}>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Meu currículo
           </a>
         )}
       </div>
 
-      {/* Filtros */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <input
-          type="text"
-          placeholder="Buscar empresa ou vaga..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 200 }}
-        />
-        <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={{ width: "auto" }}>
+      {/* Platform stats */}
+      {Object.keys(statsByPlat).length > 0 && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 20 }}>
+          {Object.entries(statsByPlat)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 8)
+            .map(([plat, count]) => (
+              <button
+                key={plat}
+                onClick={() => setFiltroPlatforma(filtroPlatforma === plat ? "todas" : plat)}
+                style={{
+                  padding: "5px 12px", borderRadius: 100, fontSize: 12, fontWeight: 500,
+                  background: filtroPlatforma === plat ? `${PLAT_COLOR[plat] || "var(--accent)"}30` : "var(--bg-card)",
+                  border: `1px solid ${filtroPlatforma === plat ? (PLAT_COLOR[plat] || "var(--accent)") + "60" : "var(--border)"}`,
+                  color: PLAT_COLOR[plat] || "var(--accent)",
+                  cursor: "pointer",
+                  transition: "all 0.15s",
+                }}
+              >
+                {plat} · {count}
+              </button>
+            ))
+          }
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 200, position: "relative" }}>
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "var(--text-tertiary)", pointerEvents: "none" }}>
+            <circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar empresa ou vaga..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ paddingLeft: 36 }}
+          />
+        </div>
+        <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={{ width: "auto", paddingRight: 32 }}>
           <option value="todos">Todos os status</option>
-          <option value="enviado">Enviado</option>
-          <option value="duplicado">Duplicado</option>
-          <option value="falhou">Falhou</option>
-          <option value="nao_suportado">Não suportado</option>
+          <option value="enviado">✓ Enviado</option>
+          <option value="duplicado">⟲ Duplicado</option>
+          <option value="falhou">✕ Falhou</option>
+          <option value="nao_suportado">— Não suportado</option>
+          <option value="sem_submit">— Sem submit</option>
         </select>
-        <select value={filtroPlatforma} onChange={e => setFiltroPlatforma(e.target.value)} style={{ width: "auto" }}>
+        <select value={filtroPlatforma} onChange={e => setFiltroPlatforma(e.target.value)} style={{ width: "auto", paddingRight: 32 }}>
           {plataformas.map(p => <option key={p} value={p}>{p === "todas" ? "Todas as plataformas" : p}</option>)}
         </select>
       </div>
 
-      {/* Tabela */}
+      {/* Table */}
       {filtered.length === 0 ? (
-        <div className="card">
-          <p className="text-muted" style={{ textAlign: "center" }}>
-            {apps.length === 0 ? "Nenhuma candidatura ainda. Ative o bot nas configuracoes." : "Nenhum resultado para os filtros selecionados."}
+        <div style={{ padding: 40, borderRadius: "var(--radius-lg)", border: "1px dashed var(--border)", textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 10 }}>
+            {apps.length === 0 ? "🤖" : "🔍"}
+          </div>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14 }}>
+            {apps.length === 0 ? "Nenhuma candidatura ainda. Ative o bot nas configurações." : "Nenhum resultado para os filtros."}
           </p>
         </div>
       ) : (
-        <div className="card" style={{ padding: 0, overflow: "auto" }}>
+        <div style={{ borderRadius: "var(--radius-lg)", border: "1px solid var(--border)", overflow: "hidden", background: "var(--bg-card)" }}>
           <table>
             <thead>
               <tr>
@@ -150,118 +182,99 @@ export default function CandidaturasPage() {
                 <th>Plataforma</th>
                 <th>Status</th>
                 <th>Data</th>
-                <th></th>
+                <th style={{ width: 60 }}></th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((app) => (
-                <tr key={app.id} style={{ cursor: "pointer" }} onClick={() => setSelected(app)}>
-                  <td>
-                    <div style={{ fontWeight: 500 }}>{app.empresa || "-"}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
-                      {app.vaga?.replace(/-/g, " ").slice(0, 60) || "-"}
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge" style={{
-                      background: `${plataformaCor[app.plataforma] || "#6366f1"}22`,
-                      color: plataformaCor[app.plataforma] || "var(--primary)",
-                    }}>
-                      {app.plataforma}
-                    </span>
-                  </td>
-                  <td>
-                    <span className={`badge ${statusBadge[app.status] || "badge-warning"}`}>
-                      {statusLabel[app.status] || app.status}
-                    </span>
-                  </td>
-                  <td className="text-muted" style={{ fontSize: 13 }}>
-                    {new Date(app.created_at).toLocaleDateString("pt-BR")}
-                  </td>
-                  <td>
-                    {app.vaga_url && (
-                      <a
-                        href={app.vaga_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={e => e.stopPropagation()}
-                        style={{ fontSize: 12, color: "var(--primary)" }}
-                      >
-                        Ver vaga ↗
-                      </a>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {filtered.map(app => {
+                const statusInfo = STATUS_MAP[app.status] || { label: app.status, color: "var(--text-tertiary)", bg: "rgba(99,99,102,0.1)" };
+                return (
+                  <tr
+                    key={app.id}
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setSelected(app)}
+                  >
+                    <td>
+                      <div style={{ fontWeight: 500, fontSize: 14 }}>{app.empresa || app.plataforma}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 2 }}>
+                        {(app.vaga || "").replace(/-/g, " ").slice(0, 65) || "—"}
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 6,
+                        padding: "3px 10px", borderRadius: 100,
+                        fontSize: 11, fontWeight: 600,
+                        background: `${PLAT_COLOR[app.plataforma] || "#6366f1"}18`,
+                        color: PLAT_COLOR[app.plataforma] || "var(--accent)",
+                      }}>
+                        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "currentColor", flexShrink: 0 }} />
+                        {app.plataforma}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 100, fontSize: 11, fontWeight: 600, background: statusInfo.bg, color: statusInfo.color }}>
+                        {statusInfo.label}
+                      </span>
+                    </td>
+                    <td style={{ color: "var(--text-tertiary)", fontSize: 13 }}>
+                      {new Date(app.created_at).toLocaleDateString("pt-BR")}
+                    </td>
+                    <td onClick={e => e.stopPropagation()}>
+                      {app.vaga_url && (
+                        <a href={app.vaga_url} target="_blank" rel="noreferrer" style={{ fontSize: 13, color: "var(--accent)", fontWeight: 500 }}>
+                          ↗
+                        </a>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* Modal de detalhes */}
+      {/* Detail modal */}
       {selected && (
         <div
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            zIndex: 1000, padding: 20,
-          }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}
           onClick={() => setSelected(null)}
         >
           <div
-            className="card"
-            style={{ maxWidth: 520, width: "100%", position: "relative" }}
+            style={{ maxWidth: 480, width: "100%", background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: 24, position: "relative", boxShadow: "var(--shadow-elevated)", animation: "slideUp 0.2s ease" }}
             onClick={e => e.stopPropagation()}
           >
-            <button
-              onClick={() => setSelected(null)}
-              style={{ position: "absolute", top: 16, right: 16, background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--text-muted)" }}
-            >
-              ✕
-            </button>
+            <button onClick={() => setSelected(null)} style={{ position: "absolute", top: 16, right: 16, background: "rgba(255,255,255,0.06)", border: "none", borderRadius: 8, width: 28, height: 28, fontSize: 14, cursor: "pointer", color: "var(--text-secondary)", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
 
-            <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4, paddingRight: 32 }}>
-              {selected.empresa || "Empresa"}
-            </h3>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20 }}>
-              {selected.vaga?.replace(/-/g, " ") || "Vaga"}
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
-              <div style={{ background: "var(--bg)", borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>PLATAFORMA</div>
-                <span className="badge" style={{
-                  background: `${plataformaCor[selected.plataforma] || "#6366f1"}22`,
-                  color: plataformaCor[selected.plataforma] || "var(--primary)",
-                }}>
-                  {selected.plataforma}
-                </span>
-              </div>
-              <div style={{ background: "var(--bg)", borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>STATUS</div>
-                <span className={`badge ${statusBadge[selected.status] || "badge-warning"}`}>
-                  {statusLabel[selected.status] || selected.status}
-                </span>
-              </div>
-              <div style={{ background: "var(--bg)", borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>DATA</div>
-                <div style={{ fontSize: 14 }}>{new Date(selected.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}</div>
-              </div>
-              <div style={{ background: "var(--bg)", borderRadius: 8, padding: "10px 14px" }}>
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 4 }}>HORA</div>
-                <div style={{ fontSize: 14 }}>{new Date(selected.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</div>
-              </div>
+            <div style={{ marginBottom: 20 }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, paddingRight: 40, marginBottom: 4 }}>{selected.empresa || "Empresa"}</h3>
+              <p style={{ fontSize: 13, color: "var(--text-secondary)" }}>{(selected.vaga || "").replace(/-/g, " ").slice(0, 80)}</p>
             </div>
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 20 }}>
+              {[
+                { label: "PLATAFORMA", content: <span style={{ fontSize: 13, fontWeight: 600, color: PLAT_COLOR[selected.plataforma] || "var(--accent)" }}>{selected.plataforma}</span> },
+                { label: "STATUS", content: <span style={{ fontSize: 13, fontWeight: 600, color: STATUS_MAP[selected.status]?.color || "var(--text-secondary)" }}>{STATUS_MAP[selected.status]?.label || selected.status}</span> },
+                { label: "DATA", content: <span style={{ fontSize: 13 }}>{new Date(selected.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}</span> },
+                { label: "HORA", content: <span style={{ fontSize: 13 }}>{new Date(selected.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span> },
+              ].map(item => (
+                <div key={item.label} style={{ background: "var(--bg)", borderRadius: 10, padding: "10px 14px" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-tertiary)", marginBottom: 5, letterSpacing: "0.08em", fontWeight: 600 }}>{item.label}</div>
+                  {item.content}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
               {selected.vaga_url && (
-                <a href={selected.vaga_url} target="_blank" rel="noreferrer" className="btn-primary" style={{ textDecoration: "none", flex: 1, textAlign: "center", padding: "10px 0" }}>
+                <a href={selected.vaga_url} target="_blank" rel="noreferrer" className="btn-primary" style={{ textDecoration: "none", flex: 1, textAlign: "center", padding: "10px 0", fontSize: 13 }}>
                   Ver vaga ↗
                 </a>
               )}
               {cvUrl && (
-                <a href={cvUrl} target="_blank" rel="noreferrer" className="btn-outline" style={{ textDecoration: "none", flex: 1, textAlign: "center", padding: "10px 0" }}>
-                  📄 Ver currículo enviado
+                <a href={cvUrl} target="_blank" rel="noreferrer" className="btn-ghost" style={{ textDecoration: "none", flex: 1, textAlign: "center", padding: "10px 0", fontSize: 13 }}>
+                  📄 Meu currículo
                 </a>
               )}
             </div>

@@ -206,19 +206,19 @@ async function applyWorkana(browser, authContext, config) {
             if (submitBtn && await submitBtn.isVisible()) {
               await submitBtn.click();
               applied++;
-              results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop() || `projeto-${applied}`, plataforma: "Workana", status: "enviado" });
+              results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop() || `projeto-${applied}`, vaga_url: jobUrl, plataforma: "Workana", status: "enviado" });
               log(`[OK] Workana proposta #${applied}`);
             } else {
-              results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop(), plataforma: "Workana", status: "sem_submit" });
+              results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "Workana", status: "sem_submit" });
             }
           } else {
-            results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop(), plataforma: "Workana", status: "nao_suportado" });
+            results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "Workana", status: "nao_suportado" });
           }
           await jobPage.close();
           await randomDelay(3000, 6000);
         } catch (e) {
           log(`[ERRO] Workana: ${e.message}`);
-          results.push({ empresa: "Workana", vaga: "unknown", plataforma: "Workana", status: "falhou" });
+          results.push({ empresa: "Workana", vaga: "unknown", vaga_url: null, plataforma: "Workana", status: "falhou" });
         }
       }
 

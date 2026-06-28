@@ -151,19 +151,19 @@ async function apply99Freelas(browser, authContext, config) {
             if (submitBtn) {
               await submitBtn.click();
               applied++;
-              results.push({ empresa: "99Freelas", vaga: jobUrl.split("/").pop() || `projeto-${applied}`, plataforma: "99Freelas", status: "enviado" });
+              results.push({ empresa: "99Freelas", vaga: jobUrl.split("/").pop() || `projeto-${applied}`, vaga_url: jobUrl, plataforma: "99Freelas", status: "enviado" });
               log(`[OK] 99Freelas #${applied}`);
             } else {
-              results.push({ empresa: "99Freelas", vaga: jobUrl.split("/").pop(), plataforma: "99Freelas", status: "sem_submit" });
+              results.push({ empresa: "99Freelas", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "99Freelas", status: "sem_submit" });
             }
           } else {
-            results.push({ empresa: "99Freelas", vaga: jobUrl.split("/").pop(), plataforma: "99Freelas", status: "nao_suportado" });
+            results.push({ empresa: "99Freelas", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "99Freelas", status: "nao_suportado" });
           }
           await jobPage.close();
           await randomDelay(3000, 6000);
         } catch (e) {
           log(`[ERRO] 99Freelas: ${e.message}`);
-          results.push({ empresa: "99Freelas", vaga: "unknown", plataforma: "99Freelas", status: "falhou" });
+          results.push({ empresa: "99Freelas", vaga: "unknown", vaga_url: null, plataforma: "99Freelas", status: "falhou" });
         }
       }
 

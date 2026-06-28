@@ -3,6 +3,7 @@
 import { supabase } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -23,103 +24,99 @@ export default function RegisterPage() {
       options: { emailRedirectTo: `${window.location.origin}/dashboard` },
     });
 
-    if (error) {
-      setErro(error.message);
-      setLoading(false);
-      return;
-    }
+    if (error) { setErro(error.message); setLoading(false); return; }
 
-    // If session exists, user is already logged in (email confirmation disabled)
-    if (data.session) {
-      router.push("/dashboard");
-      return;
-    }
+    if (data.session) { router.push("/dashboard"); return; }
 
-    // Fallback: try to sign in manually (email may already be confirmed)
     if (data.user?.email_confirmed_at) {
       const { error: loginError } = await supabase.auth.signInWithPassword({ email, password: senha });
-      if (!loginError) {
-        router.push("/dashboard");
-        return;
-      }
+      if (!loginError) { router.push("/dashboard"); return; }
     }
 
-    // Email confirmation required
     setSucesso(true);
     setLoading(false);
   };
 
   if (sucesso) {
     return (
-      <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        <div style={{ width: "100%", maxWidth: 400, textAlign: "center" }}>
-          <div className="card">
-            <h2 style={{ fontSize: 20, marginBottom: 12 }}>Conta criada!</h2>
-            <p className="text-muted" style={{ marginBottom: 20 }}>
-              Verifique seu email para confirmar o cadastro.
-            </p>
-            <a href="/login" className="btn-primary" style={{ display: "inline-block" }}>
-              Ir para o login
-            </a>
-          </div>
+      <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", padding: 24, background: "var(--bg)" }}>
+        <div style={{ maxWidth: 380, width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
+          <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 10 }}>Verifique seu email</h2>
+          <p style={{ color: "var(--text-secondary)", marginBottom: 24, fontSize: 14, lineHeight: 1.6 }}>
+            Enviamos um link de confirmação para <strong style={{ color: "var(--text)" }}>{email}</strong>.
+            Clique no link para ativar sua conta.
+          </p>
+          <Link href="/login" className="btn-primary" style={{ display: "inline-block", padding: "11px 24px" }}>
+            Ir para o login
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, color: "var(--primary)" }}>
-            AutoCurriculo AI
-          </h1>
-          <p className="text-muted" style={{ marginTop: 8 }}>
-            Crie sua conta gratuita
-          </p>
+    <div style={{
+      display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center",
+      padding: 24, background: "var(--bg)",
+    }}>
+      <div style={{ position: "fixed", inset: 0, zIndex: 0, overflow: "hidden", pointerEvents: "none" }}>
+        <div style={{
+          position: "absolute", top: "-20%", left: "50%", transform: "translateX(-50%)",
+          width: 600, height: 600, borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(191,90,242,0.06) 0%, transparent 70%)",
+        }} />
+      </div>
+
+      <div style={{ width: "100%", maxWidth: 380, position: "relative", zIndex: 1 }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14,
+            background: "linear-gradient(135deg, var(--accent), var(--purple))",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            margin: "0 auto 16px",
+            boxShadow: "0 8px 32px rgba(10,132,255,0.3)",
+          }}>
+            <svg width="24" height="24" fill="white" viewBox="0 0 24 24">
+              <path d="M20 6h-2.18c.07-.44.18-.86.18-1a2 2 0 00-2-2h-2a2 2 0 00-2 2c0 .14.11.56.18 1H10c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-7-1h2v2h-2V5zm-3 3h8v10H10V8z" />
+            </svg>
+          </div>
+          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em" }}>Criar conta</h1>
+          <p style={{ fontSize: 14, color: "var(--text-secondary)", marginTop: 6 }}>Comece a automatizar suas candidaturas</p>
         </div>
 
-        <div className="card">
+        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: 28, boxShadow: "var(--shadow-card)" }}>
           <form onSubmit={handleRegister}>
             {erro && (
-              <div className="badge badge-danger" style={{ marginBottom: 16, width: "100%", justifyContent: "center" }}>
+              <div style={{ marginBottom: 18, padding: "10px 14px", borderRadius: "var(--radius-sm)", background: "rgba(255,69,58,0.1)", border: "1px solid rgba(255,69,58,0.2)", color: "var(--red)", fontSize: 13 }}>
                 {erro}
               </div>
             )}
 
-            <label style={{ display: "block", marginBottom: 6, fontSize: 13, color: "var(--text-muted)" }}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{ marginBottom: 16 }}
-              placeholder="seu@email.com"
-            />
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: "0.02em" }}>EMAIL</label>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="seu@email.com" autoComplete="email" />
+            </div>
 
-            <label style={{ display: "block", marginBottom: 6, fontSize: 13, color: "var(--text-muted)" }}>
-              Senha
-            </label>
-            <input
-              type="password"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              required
-              minLength={6}
-              style={{ marginBottom: 24 }}
-              placeholder="Minimo 6 caracteres"
-            />
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: "0.02em" }}>SENHA</label>
+              <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={6} placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
+            </div>
 
-            <button type="submit" className="btn-primary" disabled={loading} style={{ width: "100%", padding: 12 }}>
-              {loading ? "Criando conta..." : "Criar conta"}
+            <button type="submit" className="btn-primary" disabled={loading} style={{ width: "100%", padding: "12px 0", fontSize: 15, fontWeight: 600 }}>
+              {loading ? (
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                  <span className="animate-spin" style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%" }} />
+                  Criando...
+                </span>
+              ) : "Criar conta grátis"}
             </button>
           </form>
         </div>
 
-        <p style={{ textAlign: "center", marginTop: 24, fontSize: 14 }} className="text-muted">
-          Ja tem conta? <a href="/login">Fazer login</a>
+        <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "var(--text-secondary)" }}>
+          Já tem conta?{" "}
+          <Link href="/login" style={{ color: "var(--accent)", fontWeight: 500 }}>Fazer login</Link>
         </p>
       </div>
     </div>

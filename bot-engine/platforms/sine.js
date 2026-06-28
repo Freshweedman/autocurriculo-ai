@@ -84,22 +84,22 @@ async function applySine(browser, authContext, config) {
               if (submitBtn) {
                 await submitBtn.click();
                 applied++;
-                results.push({ empresa: "Sine", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, plataforma: "Sine", status: "enviado" });
+                results.push({ empresa: "Sine", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "Sine", status: "enviado" });
                 log(`[OK] Sine #${applied}`);
               } else {
-                results.push({ empresa: "Sine", vaga: jobUrl.split("/").pop(), plataforma: "Sine", status: "sem_submit" });
+                results.push({ empresa: "Sine", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "Sine", status: "sem_submit" });
               }
             } else {
-              results.push({ empresa: "Sine", vaga: jobUrl.split("/").pop(), plataforma: "Sine", status: "sem_file_input" });
+              results.push({ empresa: "Sine", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "Sine", status: "sem_file_input" });
             }
           } else {
-            results.push({ empresa: "Sine", vaga: jobUrl.split("/").pop(), plataforma: "Sine", status: "nao_suportado" });
+            results.push({ empresa: "Sine", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "Sine", status: "nao_suportado" });
           }
           await jobPage.close();
           await randomDelay(2000, 4000);
         } catch (e) {
           log(`[ERRO] Sine: ${e.message}`);
-          results.push({ empresa: "Sine", vaga: "unknown", plataforma: "Sine", status: "falhou" });
+          results.push({ empresa: "Sine", vaga: "unknown", vaga_url: null, plataforma: "Sine", status: "falhou" });
         }
       }
 
