@@ -67,6 +67,27 @@ export default function CanaisPage() {
         </div>
       </div>
 
+      {/* Tutorial */}
+      <div style={{background:"rgba(10,132,255,0.05)",border:"1px solid rgba(10,132,255,0.15)",borderRadius:"var(--radius-lg)",padding:"16px 20px",marginBottom:24}}>
+        <div style={{fontWeight:600,fontSize:13,color:"var(--accent)",marginBottom:8}}>📡 Modos de publicação</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+          {[
+            {icon:"✋",t:"Manual",d:"Você abre e publica tudo manualmente. Mais controle."},
+            {icon:"📋",t:"Copiar e Colar",d:"O sistema gera o texto pronto, você cola na plataforma."},
+            {icon:"🤖",t:"Runner Local",d:"O agente Python abre o navegador e preenche os campos. Você confirma."},
+            {icon:"⚡",t:"API Oficial",d:"Integração direta via API quando disponível (futuro)."},
+          ].map(s=>(
+            <div key={s.t} style={{display:"flex",gap:10}}>
+              <span style={{fontSize:18,flexShrink:0,marginTop:2}}>{s.icon}</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:"var(--text)",marginBottom:2}}>{s.t}</div>
+                <div style={{fontSize:11,color:"var(--text-tertiary)",lineHeight:1.4}}>{s.d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {showForm && (
         <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:24,marginBottom:24}}>
           <h3 style={{fontSize:16,fontWeight:600,marginBottom:18}}>{editId?"Editar canal":"Novo canal"}</h3>

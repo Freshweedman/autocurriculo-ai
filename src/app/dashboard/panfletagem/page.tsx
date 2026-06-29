@@ -78,6 +78,27 @@ export default function PanfletagemPage() {
         </p>
       </div>
 
+      {/* Tutorial */}
+      <div style={{background:"rgba(10,132,255,0.05)",border:"1px solid rgba(10,132,255,0.15)",borderRadius:"var(--radius-lg)",padding:"16px 20px",marginBottom:24}}>
+        <div style={{fontWeight:600,fontSize:13,color:"var(--accent)",marginBottom:8}}>⚡ Como funciona o Gerador</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
+          {[
+            {n:"1",t:"Selecione o serviço",d:"Escolha qual serviço quer divulgar (cadastre em Meus Serviços primeiro)"},
+            {n:"2",t:"Escolha o tom",d:"Profissional, Urgente, Premium, Local... cada tom gera textos diferentes"},
+            {n:"3",t:"Clique em Gerar",d:"85+ variações são criadas: títulos, OLX, Facebook, WhatsApp, Workana, Fiverr..."},
+            {n:"4",t:"Copie e publique",d:"Clique em Copiar em qualquer variação e cole diretamente na plataforma"},
+          ].map(s=>(
+            <div key={s.n} style={{display:"flex",gap:10}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(10,132,255,0.2)",color:"var(--accent)",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{s.n}</div>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:"var(--text)",marginBottom:2}}>{s.t}</div>
+                <div style={{fontSize:11,color:"var(--text-tertiary)",lineHeight:1.4}}>{s.d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Config panel */}
       <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:"var(--radius-lg)",padding:24,marginBottom:24}}>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20}}>

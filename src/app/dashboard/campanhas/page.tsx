@@ -74,6 +74,27 @@ export default function CampanhasPage() {
           + Nova Campanha
         </button>
       </div>
+      {/* Tutorial */}
+      <div style={{background:"rgba(10,132,255,0.05)",border:"1px solid rgba(10,132,255,0.15)",borderRadius:"var(--radius-lg)",padding:"16px 20px",marginBottom:24}}>
+        <div style={{fontWeight:600,fontSize:13,color:"var(--accent)",marginBottom:8}}>📣 Como usar Campanhas</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
+          {[
+            {n:"1",t:"Crie uma campanha",d:'Ex: "Vender sites para clínicas em SP" — vincule a um serviço'},
+            {n:"2",t:"Defina o público",d:"Cidade, público-alvo e tom de voz (profissional, urgente, local...)"},
+            {n:"3",t:"Use na Panfletagem",d:"Selecione a campanha ao gerar panfletos para textos mais direcionados"},
+            {n:"4",t:"Acompanhe resultados",d:"Registre leads em Leads e publicações no Histórico"},
+          ].map(s=>(
+            <div key={s.n} style={{display:"flex",gap:10}}>
+              <div style={{width:22,height:22,borderRadius:"50%",background:"rgba(10,132,255,0.2)",color:"var(--accent)",fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{s.n}</div>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:"var(--text)",marginBottom:2}}>{s.t}</div>
+                <div style={{fontSize:11,color:"var(--text-tertiary)",lineHeight:1.4}}>{s.d}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {msg && <div className="toast toast-success" style={{position:"relative",bottom:"auto",right:"auto",marginBottom:16}}>✓ {msg}</div>}
 
       {showForm && (
