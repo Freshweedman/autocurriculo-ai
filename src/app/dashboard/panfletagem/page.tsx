@@ -113,10 +113,15 @@ export default function PanfletagemPage() {
       </div>
 
       {services.length===0&&(
-        <div style={{padding:"14px 18px",borderRadius:"var(--radius)",background:"rgba(255,159,10,0.06)",border:"1px solid rgba(255,159,10,0.2)",marginBottom:20}}>
-          <p style={{fontSize:13,color:"var(--orange)"}}>
-            ⚠️ Cadastre pelo menos um serviço em <a href="/dashboard/servicos" style={{color:"var(--orange)",fontWeight:600}}>Meus Serviços</a> para gerar panfletos.
+        <div style={{textAlign:"center",padding:"48px 32px",border:"1px dashed var(--border)",borderRadius:"var(--radius-lg)",marginBottom:20}}>
+          <div style={{fontSize:44,marginBottom:14}}>⚡</div>
+          <p style={{color:"var(--text-secondary)",fontSize:15,fontWeight:500,marginBottom:8}}>Cadastre seus serviços primeiro</p>
+          <p style={{color:"var(--text-tertiary)",fontSize:13,marginBottom:24}}>
+            O gerador usa os dados do seu serviço (nome, preço, público) para criar anúncios personalizados para cada canal.
           </p>
+          <a href="/dashboard/servicos" className="btn-primary" style={{display:"inline-flex",alignItems:"center",gap:8,padding:"11px 28px",fontSize:14,fontWeight:600,textDecoration:"none"}}>
+            💼 Ir para Meus Serviços
+          </a>
         </div>
       )}
 

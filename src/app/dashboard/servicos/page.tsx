@@ -9,6 +9,58 @@ interface Service {
 }
 
 const CATS = ["Sites","Landing Pages","Lojas Virtuais","Sistemas","Criativos","Capturas","Portfólios","Outros"];
+
+const SERVICOS_PADRAO = [
+  {
+    name:"Criação de Site Profissional",category:"Sites",
+    base_description:"Criação de site profissional completo para pequenos e médios negócios. Layout moderno, responsivo, otimizado para Google e pronto para receber clientes.",
+    price_min:"800",price_mid:"1500",price_max:"3000",delivery_time:"7 dias úteis",
+    includes:"Domínio, hospedagem 1 ano, SSL, até 5 páginas, formulário de contato, integração WhatsApp, SEO básico",
+    target_audience:"Clínicas, restaurantes, advogados, prestadores de serviços locais, delivery",
+    portfolio_url:"",whatsapp_url:"",instagram_url:"",active:true,
+  },
+  {
+    name:"Landing Page para Tráfego Pago",category:"Landing Pages",
+    base_description:"Landing page de alta conversão para campanhas de Google Ads e Meta Ads. Foco total em captura de leads e vendas.",
+    price_min:"600",price_mid:"1200",price_max:"2500",delivery_time:"5 dias úteis",
+    includes:"1 página otimizada, formulário de captura, pixel instalado, integração WhatsApp, A/B ready",
+    target_audience:"Infoprodutores, prestadores de serviços, cursos online, clínicas estéticas",
+    portfolio_url:"",whatsapp_url:"",instagram_url:"",active:true,
+  },
+  {
+    name:"Loja Virtual",category:"Lojas Virtuais",
+    base_description:"Loja virtual completa com catálogo de produtos, carrinho de compras, checkout e integração com meios de pagamento.",
+    price_min:"1500",price_mid:"3000",price_max:"6000",delivery_time:"15 dias úteis",
+    includes:"Catálogo, checkout, pagamento online, gestão de estoque, painel admin, mobile-friendly",
+    target_audience:"Lojistas, artesãos, empreendedores, marcas de roupas e calçados",
+    portfolio_url:"",whatsapp_url:"",instagram_url:"",active:true,
+  },
+  {
+    name:"Site para Clínica",category:"Sites",
+    base_description:"Site especializado para clínicas médicas, odontológicas, estéticas e de saúde. Inclui agendamento online e apresentação dos profissionais.",
+    price_min:"1000",price_mid:"2000",price_max:"4000",delivery_time:"10 dias úteis",
+    includes:"Agendamento online, perfil dos profissionais, galeria, depoimentos, integração WhatsApp, LGPD",
+    target_audience:"Clínicas médicas, odontológicas, psicólogos, fisioterapeutas, nutricionistas",
+    portfolio_url:"",whatsapp_url:"",instagram_url:"",active:true,
+  },
+  {
+    name:"Site para Delivery",category:"Sites",
+    base_description:"Site de cardápio digital para restaurantes e delivery. Integrado com WhatsApp para receber pedidos diretamente.",
+    price_min:"700",price_mid:"1200",price_max:"2500",delivery_time:"5 dias úteis",
+    includes:"Cardápio digital, pedido via WhatsApp, galeria de pratos, horários, localização, mobile first",
+    target_audience:"Restaurantes, hamburguerias, pizzarias, marmitarias, docerias",
+    portfolio_url:"",whatsapp_url:"",instagram_url:"",active:true,
+  },
+  {
+    name:"Criativo para Anúncio",category:"Criativos",
+    base_description:"Criação de criativos profissionais para campanhas de Meta Ads e Google Ads. Formato story, feed e banner.",
+    price_min:"200",price_mid:"500",price_max:"1200",delivery_time:"2 dias úteis",
+    includes:"5 variações, formatos story e feed, arquivos editáveis, revisões incluídas",
+    target_audience:"Negócios que fazem tráfego pago, e-commerces, infoprodutores",
+    portfolio_url:"",whatsapp_url:"",instagram_url:"",active:true,
+  },
+];
+
 const emptyForm = () => ({
   name:"", category:"Sites", base_description:"", price_min:"", price_mid:"", price_max:"",
   delivery_time:"", includes:"", target_audience:"", portfolio_url:"",
@@ -23,6 +75,7 @@ export default function ServicosPage() {
   const [form, setForm] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
+  const [addingDefaults, setAddingDefaults] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -30,6 +83,19 @@ export default function ServicosPage() {
     const r = await fetch("/api/services");
     if (r.ok) { const d = await r.json(); setServices(d.services); }
     setLoading(false);
+  };
+
+  const addDefaults = async () => {
+    setAddingDefaults(true);
+    for (const s of SERVICOS_PADRAO) {
+      await fetch("/api/services", { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ ...s, includes: s.includes.split(",").map(x=>x.trim()).filter(Boolean) }) });
+    }
+    const r2 = await fetch("/api/services");
+    if (r2.ok) { const d = await r2.json(); setServices(d.services); }
+    setMsg("6 serviços padrão adicionados! Edite com seus dados reais.");
+    setTimeout(()=>setMsg(""),5000);
+    setAddingDefaults(false);
   };
 
   const save = async (e: React.FormEvent) => {
@@ -69,9 +135,16 @@ export default function ServicosPage() {
           <h1 style={{fontSize:26,fontWeight:700,letterSpacing:"-0.03em"}}>Meus Serviços</h1>
           <p style={{color:"var(--text-secondary)",marginTop:4,fontSize:14}}>{services.length} serviços cadastrados</p>
         </div>
-        <button className="btn-primary" onClick={()=>{setForm(emptyForm());setEditId(null);setShowForm(true);}} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 20px",fontWeight:600}}>
-          + Novo Serviço
-        </button>
+        <div style={{display:"flex",gap:10}}>
+          {services.length===0 && (
+            <button className="btn-outline" onClick={addDefaults} disabled={addingDefaults} style={{padding:"10px 16px",fontSize:13}}>
+              {addingDefaults ? "Adicionando..." : "⚡ Adicionar meus serviços"}
+            </button>
+          )}
+          <button className="btn-primary" onClick={()=>{setForm(emptyForm());setEditId(null);setShowForm(true);}} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 20px",fontWeight:600}}>
+            + Novo Serviço
+          </button>
+        </div>
       </div>
       {msg && <div className="toast toast-success" style={{position:"relative",bottom:"auto",right:"auto",marginBottom:16}}>✓ {msg}</div>}
 
@@ -113,10 +186,23 @@ export default function ServicosPage() {
 
       {loading ? <div style={{textAlign:"center",padding:60}}><div className="animate-spin" style={{width:24,height:24,border:"2px solid var(--border)",borderTopColor:"var(--accent)",borderRadius:"50%",margin:"0 auto"}}/></div>
       : services.length===0&&!showForm ? (
-        <div style={{textAlign:"center",padding:60,border:"1px dashed var(--border)",borderRadius:"var(--radius-lg)"}}>
-          <div style={{fontSize:40,marginBottom:12}}>💼</div>
-          <p style={{color:"var(--text-secondary)",fontSize:14,marginBottom:16}}>Nenhum serviço cadastrado ainda.</p>
-          <button className="btn-primary" onClick={()=>setShowForm(true)}>Cadastrar primeiro serviço</button>
+        <div style={{textAlign:"center",padding:"48px 32px",border:"1px dashed var(--border)",borderRadius:"var(--radius-lg)"}}>
+          <div style={{fontSize:44,marginBottom:14}}>💼</div>
+          <p style={{color:"var(--text-secondary)",fontSize:15,marginBottom:8,fontWeight:500}}>Nenhum serviço cadastrado ainda.</p>
+          <p style={{color:"var(--text-tertiary)",fontSize:13,marginBottom:28,maxWidth:420,margin:"0 auto 28px"}}>
+            Adicione seus serviços reais (sites, landing pages, lojas…) para gerar anúncios automaticamente em todos os canais.
+          </p>
+          <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+            <button className="btn-primary" onClick={addDefaults} disabled={addingDefaults} style={{padding:"11px 24px",fontWeight:600,fontSize:14}}>
+              {addingDefaults?"Adicionando...":"⚡ Adicionar serviços padrão"}
+            </button>
+            <button className="btn-outline" onClick={()=>setShowForm(true)} style={{padding:"11px 24px",fontSize:14}}>
+              Criar do zero
+            </button>
+          </div>
+          <p style={{color:"var(--text-tertiary)",fontSize:12,marginTop:16}}>
+            Serviços padrão já vêm com descrição, preços e público-alvo preenchidos. Edite com seus dados depois.
+          </p>
         </div>
       ) : (
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
