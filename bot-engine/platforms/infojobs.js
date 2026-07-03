@@ -44,9 +44,9 @@ async function applyInfoJobs(browser, authContext, config) {
       await doInfoJobsLogin(page, email, senha);
     }
 
-    // Search — modality 4 = remote jobs
+    // Search — all modalities (0 = all, 4 = remote only)
     log("[INFOJOBS] Buscando vagas...");
-    const searchUrl = `https://www.infojobs.com.br/empregos.aspx?palabra=${encodeURIComponent(cargo || "gestor de trafego")}&modalidad=4`;
+    const searchUrl = `https://www.infojobs.com.br/empregos.aspx?palabra=${encodeURIComponent(cargo || "gestor de trafego")}`;
     await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await randomDelay(3000, 5000);
 

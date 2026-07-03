@@ -38,3 +38,11 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# local test/debug scripts
+test-all.js
+supabase/setup_completo.sql
+bot-engine/curriculo_*.pdf
+bot-engine/session-state.json
+bot-engine/session-state.b64
+/tmp/*.png

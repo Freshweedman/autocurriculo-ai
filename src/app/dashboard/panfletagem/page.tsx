@@ -43,18 +43,46 @@ export default function PanfletagemPage() {
   const [pamphlets, setPamphlets] = useState<Pamphlets|null>(null);
   const [copied, setCopied] = useState<string|null>(null);
   const [activeSection, setActiveSection] = useState<string|null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string|null>(null);
+  const [genError, setGenError] = useState<string|null>(null);
 
   useEffect(()=>{
-    fetch("/api/services").then(r=>r.ok?r.json():null).then(d=>{ if(d){setServices(d.services); if(d.services[0])setServiceId(d.services[0].id); }});
-    fetch("/api/campaigns").then(r=>r.ok?r.json():null).then(d=>{ if(d)setCampaigns(d.campaigns); });
+    setLoading(true);
+    setLoadError(null);
+    Promise.all([
+      fetch("/api/services").then(async r => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(`services: HTTP ${r.status} — ${body.error || r.statusText}`);
+        }
+        return r.json();
+      }),
+      fetch("/api/campaigns").then(async r => {
+        if (!r.ok) return { campaigns: [] };
+        return r.json();
+      }),
+    ]).then(([svcsData, campsData]) => {
+      setServices(svcsData.services || []);
+      if (svcsData.services?.[0]) setServiceId(svcsData.services[0].id);
+      setCampaigns(campsData.campaigns || []);
+    }).catch(e => {
+      setLoadError(e.message);
+    }).finally(() => setLoading(false));
   },[]);
 
   const generate = async () => {
     if(!serviceId){alert("Selecione um serviço primeiro.");return;}
-    setGenerating(true); setPamphlets(null);
-    const r = await fetch("/api/generate-pamphlets",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({service_id:serviceId,campaign_id:campaignId||null,tone})});
-    if(r.ok){ const d=await r.json(); setPamphlets(d.pamphlets); setActiveSection("titulos"); }
+    setGenerating(true); setPamphlets(null); setGenError(null);
+    try {
+      const r = await fetch("/api/generate-pamphlets",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({service_id:serviceId,campaign_id:campaignId||null,tone})});
+      const d = await r.json();
+      if(r.ok){ setPamphlets(d.pamphlets); setActiveSection("titulos"); }
+      else { setGenError(`Erro ${r.status}: ${d.error || r.statusText}`); }
+    } catch(e:unknown) {
+      setGenError(e instanceof Error ? e.message : "Erro desconhecido");
+    }
     setGenerating(false);
   };
 
@@ -77,6 +105,20 @@ export default function PanfletagemPage() {
           Gere dezenas de variações de anúncio prontas para cada canal externo
         </p>
       </div>
+
+      {/* Load error */}
+      {loadError && (
+        <div style={{background:"rgba(255,69,58,0.08)",border:"1px solid rgba(255,69,58,0.3)",borderRadius:"var(--radius-lg)",padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"flex-start",gap:10}}>
+          <span style={{fontSize:16,flexShrink:0}}>⚠️</span>
+          <div>
+            <div style={{fontWeight:600,fontSize:13,color:"#ff453a",marginBottom:4}}>Erro ao carregar serviços</div>
+            <div style={{fontSize:12,color:"var(--text-secondary)",marginBottom:8}}>{loadError}</div>
+            <div style={{fontSize:12,color:"var(--text-tertiary)"}}>
+              Sua sessão pode ter expirado. <a href="/login" style={{color:"var(--accent)"}}>Faça login novamente</a> ou recarregue a página.
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tutorial */}
       <div style={{background:"rgba(10,132,255,0.05)",border:"1px solid rgba(10,132,255,0.15)",borderRadius:"var(--radius-lg)",padding:"16px 20px",marginBottom:24}}>
@@ -104,9 +146,12 @@ export default function PanfletagemPage() {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20}}>
           <div>
             <label style={lbl}>SERVIÇO *</label>
-            <select value={serviceId} onChange={e=>setServiceId(e.target.value)}>
-              <option value="">— Selecionar —</option>
-              {services.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+            <select value={serviceId} onChange={e=>setServiceId(e.target.value)} disabled={loading}>
+              {loading
+                ? <option>Carregando...</option>
+                : <><option value="">— Selecionar —</option>
+                    {services.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</>
+              }
             </select>
           </div>
           <div>
@@ -131,9 +176,14 @@ export default function PanfletagemPage() {
             <><span style={{fontSize:20}}>⚡</span> Gerar Panfletos Digitais</>
           )}
         </button>
+        {genError && (
+          <div style={{marginTop:12,padding:"10px 14px",borderRadius:"var(--radius)",background:"rgba(255,69,58,0.08)",border:"1px solid rgba(255,69,58,0.25)",fontSize:12,color:"#ff453a"}}>
+            ⚠️ {genError}
+          </div>
+        )}
       </div>
 
-      {services.length===0&&(
+      {services.length===0 && !loading && !loadError &&(
         <div style={{textAlign:"center",padding:"48px 32px",border:"1px dashed var(--border)",borderRadius:"var(--radius-lg)",marginBottom:20}}>
           <div style={{fontSize:44,marginBottom:14}}>⚡</div>
           <p style={{color:"var(--text-secondary)",fontSize:15,fontWeight:500,marginBottom:8}}>Cadastre seus serviços primeiro</p>

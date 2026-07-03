@@ -1,114 +1,140 @@
-const { randomDelay, humanType } = require("../utils/delays");
+const { randomDelay } = require("../utils/delays");
 const { log } = require("../utils/logger");
 
 /**
- * Trabalha Brasil automation
+ * Trabalha Brasil v2 — URL correta + seletores atualizados
  * https://www.trabalhabrasil.com.br
- * 
- * NO LOGIN REQUIRED for many listings - direct "Candidatar" button.
- * This platform is one of Brazil's largest job boards.
  */
 async function applyTrabalhaBrasil(browser, config) {
   const { cargo, cidade, curriculoPath, limiteDiario } = config;
   const results = [];
-  const context = await browser.newContext({ viewport: { width: 1366, height: 768 } });
+  const context = await browser.newContext({
+    viewport: { width: 1366, height: 768 },
+    locale: "pt-BR",
+    userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  });
   const page = await context.newPage();
 
   try {
-    // Build search URL
-    const searchQuery = encodeURIComponent(cargo || "marketing");
-    const cityQuery = cidade ? encodeURIComponent(cidade) : "";
-    const searchUrl = cidade
-      ? `https://www.trabalhabrasil.com.br/vagas-empregos-em-${cityQuery}/${searchQuery}`
-      : `https://www.trabalhabrasil.com.br/vagas-empregos/${searchQuery}`;
-
+    // URL correta do Trabalha Brasil
+    const q = encodeURIComponent(cargo || "marketing digital");
+    const searchUrl = `https://www.trabalhabrasil.com.br/vagas-empregos/${q}`;
     log(`[TRABALHA_BRASIL] Buscando: ${searchUrl}`);
+
     await page.goto(searchUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
     await randomDelay(3000, 5000);
 
-    const maxTarget = limiteDiario || 100;
+    const maxTarget = Math.min(limiteDiario || 30, 30);
     let applied = 0;
     let pageNum = 1;
+    const seenUrls = new Set();
 
-    while (applied < maxTarget && pageNum <= 15) {
-      log(`[TRABALHA_BRASIL] Processando pagina ${pageNum}...`);
+    while (applied < maxTarget && pageNum <= 8) {
+      log(`[TRABALHA_BRASIL] Pagina ${pageNum}...`);
 
-      // Find job cards - Trabalha Brasil uses various selectors
-      const jobLinks = await page.$$(
-        'a[href*="/vagas-empregos/"], a[href*="/vaga-"], .job-card a, .vaga-card a, .card-vaga a'
-      );
+      // Coleta hrefs de vagas
+      const vagaInfos = await page.evaluate(() => {
+        const results = [];
+        const seen = new Set();
+        // Seletores atuais do site
+        const links = document.querySelectorAll(
+          'h2.job-title a, h3.job-title a, .title a[href*="vaga"], ' +
+          'a[href*="/vagas/"], a[href*="/vaga-de-"], ' +
+          '.lista-vagas a, .vaga a[href], article a[href*="vaga"]'
+        );
+        links.forEach(el => {
+          const href = el.getAttribute("href") || "";
+          const title = el.textContent?.trim() || "";
+          if (href && !seen.has(href)) {
+            seen.add(href);
+            results.push({ href, title });
+          }
+        });
+        return results.slice(0, 20);
+      });
 
-      if (jobLinks.length === 0) {
-        log("[TRABALHA_BRASIL] Nenhuma vaga encontrada. Fim.");
+      if (vagaInfos.length === 0) {
+        log("[TRABALHA_BRASIL] Nenhuma vaga — tentando seletor alternativo...");
+        // Tira screenshot para debug
+        await page.screenshot({ path: "/tmp/trabalhabrasil-debug.png" }).catch(() => {});
         break;
       }
 
-      log(`[TRABALHA_BRASIL] ${jobLinks.length} vagas na pagina ${pageNum}`);
+      log(`[TRABALHA_BRASIL] ${vagaInfos.length} vagas na pagina ${pageNum}`);
 
-      for (const link of jobLinks) {
+      for (const info of vagaInfos) {
         if (applied >= maxTarget) break;
+        const { href, title } = info;
+        const jobUrl = href.startsWith("http") ? href : `https://www.trabalhabrasil.com.br${href}`;
 
-        const href = await link.getAttribute("href");
-        if (!href || !href.includes("/vaga")) continue;
+        if (seenUrls.has(jobUrl)) continue;
+        seenUrls.add(jobUrl);
 
         try {
-          const jobUrl = href.startsWith("http") ? href : `https://www.trabalhabrasil.com.br${href}`;
-          log(`[TRABALHA_BRASIL] Acessando: ${jobUrl}`);
-
           const jobPage = await context.newPage();
           await jobPage.goto(jobUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
-          await randomDelay(2000, 4000);
+          await randomDelay(2000, 3500);
 
-          // Look for "Candidatar" / "Candidatar-se" button
+          // Empresa
+          const empresa = await jobPage.$eval(
+            '.company-name, .nome-empresa, [class*="company"], h2.empresa',
+            el => el.textContent?.trim() || ""
+          ).catch(() => "TrabalhaBrasil");
+
+          // Botão candidatar
           const candidatarBtn = await jobPage.$(
-            'button:has-text("Candidatar"), a:has-text("Candidatar"), button:has-text("Candidatar-se"), a:has-text("Candidatar-se"), button:has-text("Quero me candidatar"), .btn-candidatar, .candidatar-btn'
+            'a:has-text("Candidatar-se"), button:has-text("Candidatar-se"), ' +
+            'a:has-text("Candidatar"), button:has-text("Candidatar"), ' +
+            'a:has-text("Quero esta vaga"), a[class*="btn-candidatar"], ' +
+            'button[class*="candidatar"], a[href*="candidatar"]'
           );
 
-          if (candidatarBtn) {
+          if (candidatarBtn && await candidatarBtn.isVisible()) {
             await candidatarBtn.click();
             await randomDelay(2000, 4000);
 
-            // Look for file input to upload CV
-            const fileInput = await jobPage.$('input[type="file"]');
-            if (fileInput) {
-              await fileInput.setInputFiles(curriculoPath);
-              log(`[TRABALHA_BRASIL] Curriculo anexado - vaga #${applied + 1}`);
-              await randomDelay(1000, 2000);
+            // Verifica se abriu página de login/cadastro
+            const currentUrl = jobPage.url();
+            if (currentUrl.includes("login") || currentUrl.includes("cadastro") || currentUrl.includes("entrar")) {
+              results.push({ empresa, vaga: title || href, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "sem_login" });
+              await jobPage.close();
+              continue;
+            }
 
-              // Submit
-              const submitBtn = await jobPage.$(
-                'button[type="submit"], input[type="submit"], button:has-text("Enviar"), button:has-text("Finalizar"), button:has-text("Concluir"), button:has-text("Confirmar")'
-              );
-              if (submitBtn) {
+            const fileInput = await jobPage.$('input[type="file"]').catch(() => null);
+            if (fileInput && await fileInput.isVisible()) {
+              await fileInput.setInputFiles(curriculoPath);
+              await randomDelay(1000, 2000);
+              const submitBtn = await jobPage.$('button[type="submit"], button:has-text("Enviar candidatura"), button:has-text("Enviar"), button:has-text("Confirmar")');
+              if (submitBtn && await submitBtn.isVisible()) {
                 await submitBtn.click();
                 applied++;
-                log(`[OK] Trabalha Brasil vaga #${applied} enviada`);
-                results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "enviado" });
+                log(`[OK] TrabalhaBrasil #${applied}: ${empresa}`);
+                results.push({ empresa, vaga: title || href, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "enviado" });
               } else {
-                results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "sem_submit" });
+                results.push({ empresa, vaga: title || href, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "sem_submit" });
               }
             } else {
-              results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "sem_file_input" });
+              results.push({ empresa, vaga: title || href, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "sem_file_input" });
             }
           } else {
-            results.push({ empresa: "TrabalhaBrasil", vaga: jobUrl.split("/").pop() || `vaga-${applied}`, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "nao_suportado" });
+            results.push({ empresa, vaga: title || href, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "nao_suportado" });
           }
 
           await jobPage.close();
-          await randomDelay(2000, 4000);
-        } catch (jobErr) {
-          log(`[ERRO] Trabalha Brasil vaga: ${jobErr.message}`);
-          results.push({ empresa: "TrabalhaBrasil", vaga: href.split("/").pop() || "unknown", vaga_url: href.startsWith("http") ? href : `https://www.trabalhabrasil.com.br${href}`, plataforma: "TrabalhaBrasil", status: "falhou" });
+          await randomDelay(1500, 3000);
+        } catch (e) {
+          log(`[ERRO] TrabalhaBrasil: ${e.message}`);
+          results.push({ empresa: "TrabalhaBrasil", vaga: href, vaga_url: jobUrl, plataforma: "TrabalhaBrasil", status: "falhou" });
         }
       }
 
-      // Next page
+      // Próxima página
       if (applied < maxTarget) {
-        const nextBtn = await page.$(
-          'a[rel="next"], a:has-text("Proxima"), a:has-text(">"), .pagination .next, .pagination a:has-text(">")'
-        );
-        if (nextBtn) {
+        const nextBtn = await page.$('a[rel="next"], a:has-text("Próxima"), a:has-text("Próximo"), .pagination a:last-child, [aria-label="Next"]');
+        if (nextBtn && await nextBtn.isVisible()) {
           await nextBtn.click();
+          await page.waitForLoadState("domcontentloaded").catch(() => {});
           await randomDelay(3000, 5000);
           pageNum++;
         } else {
@@ -118,11 +144,10 @@ async function applyTrabalhaBrasil(browser, config) {
       }
     }
 
-    log(`[TRABALHA_BRASIL] Finalizado: ${applied} candidaturas enviadas`);
-
+    log(`[TRABALHA_BRASIL] ${applied} enviadas / ${results.length} processadas`);
   } catch (err) {
-    log(`[ERRO CRITICO] Trabalha Brasil: ${err.message}`);
-    await page.screenshot({ path: "/tmp/trabalhabrasil-error.png" });
+    log(`[ERRO] TrabalhaBrasil: ${err.message}`);
+    await page.screenshot({ path: "/tmp/trabalhabrasil-error.png" }).catch(() => {});
   } finally {
     await context.close();
   }

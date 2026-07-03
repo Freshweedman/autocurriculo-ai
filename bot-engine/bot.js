@@ -38,12 +38,14 @@ const { apply99Freelas } = require("./platforms/99freelas");
 
 // Leads
 const { scrapeGoogleLeads } = require("./scraper-google");
+const { scrapeGoogleJobs }  = require("./platforms/googlejobs");
 
 // Config from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const BOT_API_KEY = process.env.BOT_API_KEY;
-const API_URL = process.env.API_URL || "http://localhost:3000";
+// CRÍTICO: API_URL deve ser a URL do Vercel em produção, não localhost
+const API_URL = (process.env.API_URL || "").replace(/\/$/, "") || "https://autocurriculo-ai.vercel.app";
 
 /**
  * Load saved browser session from SESSION_STATE env var.
@@ -258,6 +260,9 @@ function getPlatformCreds(platform, profile) {
 async function main() {
   log("[BOT] AutoCurriculo AI v2 iniciando...");
   log(`[BOT] Data/Hora: ${new Date().toISOString()}`);
+  log(`[BOT] API_URL: ${API_URL}`);
+  log(`[BOT] SUPABASE_URL: ${SUPABASE_URL ? "configurada" : "NAO CONFIGURADA"}`);
+  log(`[BOT] BOT_API_KEY: ${BOT_API_KEY ? "configurada" : "NAO CONFIGURADA"}`);
 
   if (!SUPABASE_URL) {
     log("[ERRO] NEXT_PUBLIC_SUPABASE_URL nao configurada");
@@ -317,14 +322,23 @@ async function main() {
       log(`[BOT] Buscando por: ${termosRelacionados.join(", ")}`);
 
       // Resolve credentials per-profile (from DB or env fallback)
-      const profileIndeedCreds   = hasSession ? { session: true } : getPlatformCreds("indeed",    profile);
-      const profileLinkedinCreds = hasSession ? { session: true } : getPlatformCreds("linkedin",  profile);
-      const profileInfojobsCreds = hasSession ? { session: true } : getPlatformCreds("infojobs",  profile);
-      const profileCathoCreds    = hasSession ? { session: true } : getPlatformCreds("catho",     profile);
-      const profileSineCreds     =                                   getPlatformCreds("sine",      profile);
-      const profileWorkanaCreds  =                                   getPlatformCreds("workana",   profile);
-      const profileNinjasCreds   =                                   getPlatformCreds("getninjas", profile);
-      const profileFreelas99Creds=                                   getPlatformCreds("99freelas", profile);
+  // Se hasSession, ainda assim passa as credenciais do perfil como fallback
+  const profileIndeedCreds   = hasSession
+    ? { session: true, ...getPlatformCreds("indeed",    profile) }
+    : getPlatformCreds("indeed",    profile);
+  const profileLinkedinCreds = hasSession
+    ? { session: true, ...getPlatformCreds("linkedin",  profile) }
+    : getPlatformCreds("linkedin",  profile);
+  const profileInfojobsCreds = hasSession
+    ? { session: true, ...getPlatformCreds("infojobs",  profile) }
+    : getPlatformCreds("infojobs",  profile);
+  const profileCathoCreds    = hasSession
+    ? { session: true, ...getPlatformCreds("catho",     profile) }
+    : getPlatformCreds("catho",     profile);
+  const profileSineCreds     = getPlatformCreds("sine",      profile);
+  const profileWorkanaCreds  = getPlatformCreds("workana",   profile);
+  const profileNinjasCreds   = getPlatformCreds("getninjas", profile);
+  const profileFreelas99Creds= getPlatformCreds("99freelas", profile);
 
       log(`[BOT] Plataformas com login: ${[
         profileIndeedCreds   && "Indeed",
@@ -350,7 +364,10 @@ async function main() {
       if (profileIndeedCreds) {
         log("[BOT] Indeed...");
         const r = await applyIndeed(browser, authContext, {
-          ...(profileIndeedCreds.session ? { session: true } : { email: profileIndeedCreds.email, senha: profileIndeedCreds.senha }),
+          // Passa session E credenciais — o Indeed usa session primeiro, fallback para email/senha
+          session: profileIndeedCreds.session || false,
+          email: profileIndeedCreds.email,
+          senha: profileIndeedCreds.senha,
           cargo: cargoBase, cidade, curriculoPath: cvPath, limiteDiario,
         });
         allResults.push(...r);
@@ -361,7 +378,9 @@ async function main() {
         for (const termo of termosRelacionados) {
           log(`[BOT] InfoJobs: "${termo}"...`);
           const r = await applyInfoJobs(browser, authContext, {
-            ...(profileInfojobsCreds.session ? { session: true } : { email: profileInfojobsCreds.email, senha: profileInfojobsCreds.senha }),
+            session: profileInfojobsCreds.session || false,
+            email: profileInfojobsCreds.email,
+            senha: profileInfojobsCreds.senha,
             cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
           });
           allResults.push(...r);
@@ -370,39 +389,49 @@ async function main() {
       }
 
       if (profileLinkedinCreds) {
-        // Login LinkedIn uma unica vez, depois reutiliza o contexto para todos os termos
+        // Login LinkedIn uma unica vez com timeout máximo de 30s
         log("[BOT] LinkedIn: fazendo login...");
         const linkedinPage = await authContext.newPage();
-        await linkedinPage.goto("https://www.linkedin.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
-        await linkedinPage.waitForTimeout(3000);
-
-        // Preencher login
         let linkedinLogado = false;
-        for (const sel of ["#username", 'input[name="session_key"]', 'input[autocomplete="username"]']) {
-          const el = await linkedinPage.$(sel);
-          if (el) {
-            await linkedinPage.evaluate((s) => {
-              const e = document.querySelector(s);
-              if (e) { e.style.display = "block"; e.style.visibility = "visible"; e.style.opacity = "1"; }
-            }, sel);
-            await linkedinPage.fill(sel, profileLinkedinCreds.email);
-            linkedinLogado = true;
-            break;
-          }
-        }
-        if (linkedinLogado) {
-          await linkedinPage.fill('input[type="password"]', profileLinkedinCreds.senha).catch(() => {});
-          await linkedinPage.click('button[type="submit"]').catch(() => {});
-          await linkedinPage.waitForTimeout(6000);
-        }
-        await linkedinPage.close();
+        try {
+          await linkedinPage.goto("https://www.linkedin.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
+          await linkedinPage.waitForTimeout(3000);
 
-        const linkedinOk = !(await authContext.pages()[0]?.url().includes("/login") ?? false);
+          for (const sel of ["#username", 'input[name="session_key"]', 'input[autocomplete="username"]']) {
+            const el = await linkedinPage.$(sel);
+            if (el) {
+              await linkedinPage.fill(sel, profileLinkedinCreds.email);
+              linkedinLogado = true;
+              break;
+            }
+          }
+          if (linkedinLogado) {
+            await linkedinPage.fill('input[type="password"]', profileLinkedinCreds.senha).catch(() => {});
+            await linkedinPage.click('button[type="submit"]').catch(() => {});
+            // Aguarda redirecionamento com timeout curto — não bloqueia o bot se demorar
+            await linkedinPage.waitForURL("**/feed**", { timeout: 15000 }).catch(() => {});
+            await linkedinPage.waitForTimeout(3000);
+
+            const finalUrl = linkedinPage.url();
+            if (finalUrl.includes("/checkpoint") || finalUrl.includes("/login") || finalUrl.includes("/authwall")) {
+              log("[BOT] LinkedIn: bloqueado por captcha/checkpoint. Pulando.");
+              linkedinLogado = false;
+            } else {
+              log(`[BOT] LinkedIn: login OK (${finalUrl.slice(0, 60)})`);
+            }
+          }
+        } catch (e) {
+          log(`[BOT] LinkedIn login timeout/erro: ${e.message.slice(0, 80)}`);
+          linkedinLogado = false;
+        } finally {
+          await linkedinPage.close().catch(() => {});
+        }
+
         if (linkedinLogado) {
           for (const termo of termosRelacionados) {
             log(`[BOT] LinkedIn: "${termo}"...`);
             const r = await applyLinkedIn(browser, authContext, {
-              session: true, // ja logado, usa contexto existente
+              session: true,
               cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
             });
             allResults.push(...r);
@@ -415,7 +444,9 @@ async function main() {
         for (const termo of termosRelacionados) {
           log(`[BOT] Catho: "${termo}"...`);
           const r = await applyCatho(browser, authContext, {
-            ...(profileCathoCreds.session ? { session: true } : { email: profileCathoCreds.email, senha: profileCathoCreds.senha }),
+            session: profileCathoCreds.session || false,
+            email: profileCathoCreds.email,
+            senha: profileCathoCreds.senha,
             cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
           });
           allResults.push(...r);
@@ -505,11 +536,40 @@ async function main() {
       const leads = await scrapeGoogleLeads(browser, { cargo: cargoBase, cidade });
       if (leads.length > 0) await reportLeads(userId, leads);
 
+      // --- Google Jobs (vagas reais do painel de empregos do Google) ---
+      log("[BOT] Google Jobs...");
+      const googleJobResults = await scrapeGoogleJobs(browser, {
+        cargo: cargoBase, cidade, limiteDiario: Math.min(limiteDiario, 30),
+      });
+      // Vagas do Google Jobs: tenta aplicar via site externo (generic)
+      if (googleJobResults.length > 0) {
+        log(`[BOT] Google Jobs: ${googleJobResults.length} vagas coletadas, tentando aplicar...`);
+        const gjUrls = googleJobResults
+          .map(j => j.vaga_url)
+          .filter(Boolean)
+          .filter(u => !u.includes("google.com")); // só URLs externas
+        if (gjUrls.length > 0) {
+          const gjGenericResults = await applyGeneric(browser, {
+            curriculoPath: cvPath,
+            plataforma: "GoogleJobs",
+            urls: gjUrls.slice(0, 15),
+          });
+          allResults.push(...gjGenericResults);
+          log(`[BOT] Google Jobs generico: ${gjGenericResults.length} processados`);
+        }
+        // Registra as vagas coletadas mesmo que não consiga aplicar
+        const coletadas = googleJobResults.filter(j => j.vaga_url?.includes("google.com") || gjUrls.length === 0);
+        allResults.push(...coletadas);
+      }
+
       // Report all results
       await reportResults(userId, allResults);
 
       const enviados = allResults.filter((r) => r.status === "enviado").length;
+      const porPlat = allResults.reduce((acc, r) => { acc[r.plataforma] = (acc[r.plataforma]||0)+1; return acc; }, {});
       log(`[BOT] User ${userId}: ${enviados} enviadas / ${allResults.length} processadas, ${leads.length} leads`);
+      log(`[BOT] Por plataforma: ${Object.entries(porPlat).map(([k,v])=>`${k}:${v}`).join(", ")}`);
+      log(`[BOT] API_URL usado: ${API_URL}`);
     }
 
   } catch (err) {

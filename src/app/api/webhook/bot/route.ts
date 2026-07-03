@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
 
   const supabase = createAdminClient();
   const results: { id: string; empresa: string; status: string }[] = [];
-  const trintaDiasAtras = new Date(Date.now() - 30 * 86400000).toISOString();
+  const seteDiasAtras = new Date(Date.now() - 7 * 86400000).toISOString();
 
   for (const app of applications) {
     try {
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
           .select("id")
           .eq("user_id", app.user_id)
           .eq("vaga_url", app.vaga_url)
-          .gte("created_at", trintaDiasAtras)
+          .gte("created_at", seteDiasAtras)
           .limit(1);
         isDuplicate = !!(existente && existente.length > 0);
       } else {
@@ -43,16 +43,8 @@ export async function POST(req: NextRequest) {
       }
 
       if (isDuplicate) {
+        // Don't insert duplicate records — just count them silently
         results.push({ id: "", empresa: app.empresa, status: "duplicado" });
-        // Still record duplicates so user can see what was attempted
-        await supabase.from("applications").insert({
-          user_id: app.user_id,
-          empresa: app.empresa,
-          vaga: app.vaga,
-          vaga_url: app.vaga_url || null,
-          plataforma: app.plataforma,
-          status: "duplicado",
-        });
         continue;
       }
 

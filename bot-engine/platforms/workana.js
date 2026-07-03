@@ -148,68 +148,72 @@ async function applyWorkana(browser, authContext, config) {
           if (propBtn) {
             log(`[WORKANA] Botao proposta encontrado`);
             await propBtn.click();
-            await randomDelay(3000, 5000); // espera mais para o modal abrir
+            // Espera o modal/formulário aparecer — até 8 segundos
+            await randomDelay(2000, 3000);
 
-            // O modal de proposta pode demorar para aparecer
-            const textareaSelectors = [
-              'textarea[name*="proposal"]',
-              'textarea[name*="message"]',
-              'textarea[name*="description"]',
-              'textarea[name*="cover"]',
-              'textarea[placeholder*="proposta"]',
-              'textarea[placeholder*="descri"]',
-              'textarea[placeholder*="proposal"]',
-              'textarea[placeholder*="cover"]',
-              'textarea[placeholder*="mensagem"]',
-              'textarea[placeholder*="message"]',
-              // Seletores mais genericos — pega qualquer textarea visivel no modal
-              '.modal textarea',
-              '[role="dialog"] textarea',
-              'form textarea',
-              'textarea',
-            ];
+            // Aguarda textarea ficar visível
+            let textareaEl = null;
+            for (let t = 0; t < 8; t++) {
+              const candidates = await jobPage.$$('textarea');
+              for (const c of candidates) {
+                if (await c.isVisible().catch(() => false)) { textareaEl = c; break; }
+              }
+              if (textareaEl) break;
+              await randomDelay(1000, 1500);
+            }
 
             let textareaFilled = false;
-            // Tenta por ate 10 segundos
-            for (let tentativa = 0; tentativa < 5 && !textareaFilled; tentativa++) {
-              for (const sel of textareaSelectors) {
-                try {
-                  const textarea = await jobPage.$(sel);
-                  if (textarea) {
-                    const isVisible = await textarea.isVisible();
-                    if (isVisible) {
-                      const proposta = `Ola! Sou especialista em ${cargo || "marketing digital"} com 6 anos de experiencia em gestao de trafego pago (Facebook Ads, Google Ads, TikTok Ads). Tenho interesse neste projeto e posso entregar resultados de qualidade dentro do prazo. Vamos conversar sobre os detalhes?`;
-                      await textarea.fill(proposta);
-                      textareaFilled = true;
-                      log(`[WORKANA] Textarea preenchido com seletor: ${sel}`);
-                      break;
-                    }
-                  }
-                } catch (_) {}
-              }
-              if (!textareaFilled) await randomDelay(2000, 3000);
+            if (textareaEl) {
+              const proposta = `Ola! Sou especialista em ${cargo || "marketing digital"} com experiencia em gestao de trafego pago (Facebook Ads, Google Ads, TikTok Ads). Tenho interesse neste projeto e posso entregar resultados dentro do prazo. Vamos conversar sobre os detalhes?`;
+              await textareaEl.click();
+              await randomDelay(300, 600);
+              await textareaEl.fill(proposta);
+              textareaFilled = true;
+              log(`[WORKANA] Proposta preenchida`);
+            } else {
+              log(`[WORKANA] Textarea nao encontrado`);
             }
 
-            if (!textareaFilled) {
-              log(`[WORKANA] Textarea nao encontrado apos 5 tentativas`);
-            }
-            await randomDelay(1000, 2000);
+            await randomDelay(800, 1500);
 
-            // Anexar curriculo se houver input
-            const fileInput = await jobPage.$('input[type="file"]');
+            // Curriculo se disponível
+            const fileInput = await jobPage.$('input[type="file"]').catch(() => null);
             if (fileInput && curriculoPath) {
-              await fileInput.setInputFiles(curriculoPath);
-              await randomDelay(1000, 2000);
+              await fileInput.setInputFiles(curriculoPath).catch(() => {});
+              await randomDelay(800, 1500);
             }
 
-            const submitBtn = await jobPage.$('button[type="submit"], button:has-text("Enviar"), button:has-text("Confirmar proposta"), button:has-text("Send"), .modal button[type="submit"], [role="dialog"] button[type="submit"]');
-            if (submitBtn && await submitBtn.isVisible()) {
-              await submitBtn.click();
+            // Valor da proposta — preenche com valor mínimo se houver campo
+            const valueInput = await jobPage.$('input[name*="amount"], input[name*="value"], input[name*="budget"], input[placeholder*="valor"], input[placeholder*="R$"]').catch(() => null);
+            if (valueInput && await valueInput.isVisible().catch(() => false)) {
+              await valueInput.fill("500");
+              await randomDelay(300, 600);
+            }
+
+            // Submit — espera até 5 segundos
+            let submitted = false;
+            for (let t = 0; t < 5; t++) {
+              const submitBtn = await jobPage.$(
+                '[role="dialog"] button[type="submit"], .modal button[type="submit"], ' +
+                'button:has-text("Enviar proposta"), button:has-text("Confirmar"), ' +
+                'button:has-text("Send"), button:has-text("Submit"), ' +
+                'form button[type="submit"]'
+              );
+              if (submitBtn && await submitBtn.isVisible().catch(() => false)) {
+                await submitBtn.click();
+                submitted = true;
+                break;
+              }
+              await randomDelay(1000, 1500);
+            }
+
+            if (submitted) {
+              await randomDelay(2000, 3000);
               applied++;
               results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop() || `projeto-${applied}`, vaga_url: jobUrl, plataforma: "Workana", status: "enviado" });
               log(`[OK] Workana proposta #${applied}`);
             } else {
-              results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "Workana", status: "sem_submit" });
+              results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "Workana", status: textareaFilled ? "sem_submit" : "sem_textarea" });
             }
           } else {
             results.push({ empresa: "Workana", vaga: jobUrl.split("/").pop(), vaga_url: jobUrl, plataforma: "Workana", status: "nao_suportado" });

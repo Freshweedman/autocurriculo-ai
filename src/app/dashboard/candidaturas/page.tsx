@@ -34,10 +34,12 @@ export default function CandidaturasPage() {
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("todos");
+  const [filtroStatus, setFiltroStatus] = useState("sem_duplicados"); // esconde duplicados por padrão
   const [filtroPlatforma, setFiltroPlatforma] = useState("todas");
   const [selected, setSelected] = useState<Application | null>(null);
   const [cvUrl, setCvUrl] = useState<string | null>(null);
+  const [botRunning, setBotRunning] = useState(false);
+  const [botMsg, setBotMsg] = useState<string | null>(null);
 
   useEffect(() => { loadCandidaturas(); }, []);
 
@@ -61,13 +63,36 @@ export default function CandidaturasPage() {
     if (urlData?.signedUrl) setCvUrl(urlData.signedUrl);
   };
 
+  const runBot = async () => {
+    setBotRunning(true);
+    setBotMsg(null);
+    try {
+      const r = await fetch("/api/run-bot", { method: "POST" });
+      const d = await r.json();
+      if (r.ok) {
+        setBotMsg(`✅ ${d.message || "Bot iniciado! Aguarde ~5 minutos para ver resultados."}`);
+        // Recarrega candidaturas após 5 minutos
+        setTimeout(() => { loadCandidaturas(); setBotMsg("✅ Resultados atualizados!"); }, 5 * 60 * 1000);
+      } else {
+        setBotMsg(`❌ ${d.error || "Erro ao iniciar bot"}`);
+      }
+    } catch {
+      setBotMsg("❌ Erro de conexão ao iniciar bot");
+    }
+    setBotRunning(false);
+  };
+
   const plataformas = ["todas", ...Array.from(new Set(apps.map(a => a.plataforma))).sort()];
 
   const filtered = apps.filter(a => {
     const matchSearch = !search ||
       a.empresa?.toLowerCase().includes(search.toLowerCase()) ||
       a.vaga?.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filtroStatus === "todos" || a.status === filtroStatus;
+    const matchStatus = filtroStatus === "todos"
+      ? true
+      : filtroStatus === "sem_duplicados"
+      ? a.status !== "duplicado"
+      : a.status === filtroStatus;
     const matchPlat = filtroPlatforma === "todas" || a.plataforma === filtroPlatforma;
     return matchSearch && matchStatus && matchPlat;
   });
@@ -77,6 +102,8 @@ export default function CandidaturasPage() {
     const d = new Date(a.created_at).toDateString();
     return d === new Date().toDateString() && a.status === "enviado";
   }).length;
+  // Não conta duplicados no total visível
+  const totalReal = apps.filter(a => a.status !== "duplicado").length;
 
   // Stats by platform
   const statsByPlat = apps.filter(a => a.status === "enviado").reduce((acc, a) => {
@@ -95,20 +122,50 @@ export default function CandidaturasPage() {
   return (
     <div style={{ maxWidth: 960, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 28 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em" }}>Candidaturas</h1>
           <p style={{ color: "var(--text-secondary)", marginTop: 4, fontSize: 14 }}>
             {enviadas.toLocaleString("pt-BR")} enviadas no total · {hoje} hoje
           </p>
         </div>
-        {cvUrl && (
-          <a href={cvUrl} target="_blank" rel="noreferrer" className="btn-ghost" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", fontSize: 13 }}>
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Meu currículo
-          </a>
-        )}
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {cvUrl && (
+            <a href={cvUrl} target="_blank" rel="noreferrer" className="btn-ghost" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", fontSize: 13 }}>
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Meu currículo
+            </a>
+          )}
+          <button onClick={loadCandidaturas} className="btn-ghost" style={{ padding: "8px 14px", fontSize: 13 }}>
+            ↻ Atualizar
+          </button>
+          <button
+            onClick={runBot}
+            disabled={botRunning}
+            className="btn-primary"
+            style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}
+          >
+            {botRunning
+              ? <><span className="animate-spin" style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%" }} /> Iniciando...</>
+              : <><span>🤖</span> Rodar Bot Agora</>
+            }
+          </button>
+        </div>
       </div>
+
+      {/* Bot feedback */}
+      {botMsg && (
+        <div style={{
+          padding: "12px 16px", borderRadius: "var(--radius-lg)", marginBottom: 16, fontSize: 13,
+          background: botMsg.startsWith("✅") ? "rgba(48,209,88,0.08)" : "rgba(255,69,58,0.08)",
+          border: `1px solid ${botMsg.startsWith("✅") ? "rgba(48,209,88,0.25)" : "rgba(255,69,58,0.25)"}`,
+          color: botMsg.startsWith("✅") ? "#30d158" : "#ff453a",
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+        }}>
+          <span>{botMsg}</span>
+          <button onClick={() => setBotMsg(null)} style={{ background: "none", border: "none", cursor: "pointer", color: "inherit", opacity: 0.6, fontSize: 16 }}>✕</button>
+        </div>
+      )}
 
       {/* Platform stats */}
       {Object.keys(statsByPlat).length > 0 && (
@@ -151,6 +208,7 @@ export default function CandidaturasPage() {
           />
         </div>
         <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={{ width: "auto", paddingRight: 32 }}>
+          <option value="sem_duplicados">Sem duplicados</option>
           <option value="todos">Todos os status</option>
           <option value="enviado">✓ Enviado</option>
           <option value="duplicado">⟲ Duplicado</option>
