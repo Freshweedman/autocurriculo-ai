@@ -1,7 +1,17 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
+import { hasAdminAccess } from "@/lib/admin";
 
-export async function middleware(request: NextRequest) {
+const ADMIN_ONLY_API_PREFIXES = [
+  "/api/campaigns",
+  "/api/channels",
+  "/api/generate-pamphlets",
+  "/api/publishing",
+  "/api/services",
+  "/api/setup",
+];
+
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: request.headers } });
 
   const supabase = createServerClient(
@@ -28,6 +38,12 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
+  const isAdminOnlyApi = ADMIN_ONLY_API_PREFIXES.some((prefix) => request.nextUrl.pathname.startsWith(prefix));
+  if (isAdminOnlyApi) {
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!await hasAdminAccess(supabase, user)) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  }
+
   // Protect /dashboard routes — redirect to login if not authenticated
   if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
     return NextResponse.redirect(new URL("/login", request.url));
@@ -42,5 +58,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/login", "/register"],
+  matcher: ["/dashboard/:path*", "/login", "/register", "/api/:path*"],
 };

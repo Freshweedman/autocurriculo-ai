@@ -6,10 +6,17 @@ on:
       vercel_url:
         description: 'Vercel deployment URL'
         required: true
-        default: 'https://placeholder.vercel.app'
+        default: 'https://autocurriculo-ai.vercel.app'
   workflow_run:
     workflows: ["AutoCurriculo AI Bot"]
     types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-deploy-smoke-${{ github.event.inputs.vercel_url || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   smoke-test:
@@ -19,7 +26,7 @@ jobs:
 
       - name: Run smoke tests
         env:
-          VERCEL_URL: ${{ github.event.inputs.vercel_url || 'https://placeholder.vercel.app' }}
+          VERCEL_URL: ${{ github.event.inputs.vercel_url || 'https://autocurriculo-ai.vercel.app' }}
         run: |
           echo "Running smoke tests against $VERCEL_URL"
           node tests/smoke.js "$VERCEL_URL"

@@ -5,9 +5,9 @@ export const metadata: Metadata = {
   title: "AutoCurriculo AI",
   description: "Automacao de candidaturas de emprego com IA",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
   },
 };
 

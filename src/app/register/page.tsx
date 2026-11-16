@@ -1,9 +1,11 @@
 "use client";
 
+import AuthFrame from "@/components/AuthFrame";
 import { supabase } from "@/lib/supabase/client";
+import { Loader2, MailCheck, UserPlus } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import Link from "next/link";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -13,8 +15,8 @@ export default function RegisterPage() {
   const [erro, setErro] = useState("");
   const [sucesso, setSucesso] = useState(false);
 
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleRegister = async (event: React.FormEvent) => {
+    event.preventDefault();
     setLoading(true);
     setErro("");
 
@@ -24,13 +26,23 @@ export default function RegisterPage() {
       options: { emailRedirectTo: `${window.location.origin}/dashboard` },
     });
 
-    if (error) { setErro(error.message); setLoading(false); return; }
+    if (error) {
+      setErro(error.message);
+      setLoading(false);
+      return;
+    }
 
-    if (data.session) { router.push("/dashboard"); return; }
+    if (data.session) {
+      router.push("/dashboard");
+      return;
+    }
 
     if (data.user?.email_confirmed_at) {
       const { error: loginError } = await supabase.auth.signInWithPassword({ email, password: senha });
-      if (!loginError) { router.push("/dashboard"); return; }
+      if (!loginError) {
+        router.push("/dashboard");
+        return;
+      }
     }
 
     setSucesso(true);
@@ -39,86 +51,114 @@ export default function RegisterPage() {
 
   if (sucesso) {
     return (
-      <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", padding: 24, background: "var(--bg)" }}>
-        <div style={{ maxWidth: 380, width: "100%", textAlign: "center" }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>✉️</div>
-          <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 10 }}>Verifique seu email</h2>
-          <p style={{ color: "var(--text-secondary)", marginBottom: 24, fontSize: 14, lineHeight: 1.6 }}>
-            Enviamos um link de confirmação para <strong style={{ color: "var(--text)" }}>{email}</strong>.
-            Clique no link para ativar sua conta.
+      <AuthFrame
+        title="Confirme seu acesso."
+        subtitle="Enviamos um link para ativar sua conta. Depois disso, você poderá acessar seu espaço profissional."
+        footerText="Já confirmou?"
+        footerHref="/login"
+        footerLabel="Ir para login"
+      >
+        <div style={{ display: "grid", gap: 16, textAlign: "center" }}>
+          <div style={{ width: 54, height: 54, border: "1px solid var(--border)", borderRadius: 8, background: "var(--bg-card-hover)", color: "var(--accent)", display: "grid", placeItems: "center", margin: "0 auto" }}>
+            <MailCheck size={26} />
+          </div>
+          <p style={{ color: "var(--text-secondary)", fontSize: 14, lineHeight: 1.6 }}>
+            Link enviado para <strong style={{ color: "var(--text)" }}>{email}</strong>.
           </p>
-          <Link href="/login" className="btn-primary" style={{ display: "inline-block", padding: "11px 24px" }}>
-            Ir para o login
-          </Link>
+          <Link href="/login" style={linkButtonStyle}>Ir para o login</Link>
         </div>
-      </div>
+      </AuthFrame>
     );
   }
 
   return (
-    <div style={{
-      display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center",
-      padding: 24, background: "var(--bg)",
-    }}>
-      <div style={{ position: "fixed", inset: 0, zIndex: 0, overflow: "hidden", pointerEvents: "none" }}>
-        <div style={{
-          position: "absolute", top: "-20%", left: "50%", transform: "translateX(-50%)",
-          width: 600, height: 600, borderRadius: "50%",
-          background: "radial-gradient(circle, rgba(191,90,242,0.06) 0%, transparent 70%)",
-        }} />
-      </div>
-
-      <div style={{ width: "100%", maxWidth: 380, position: "relative", zIndex: 1 }}>
-        <div style={{ textAlign: "center", marginBottom: 36 }}>
+    <AuthFrame
+      title="Organize sua próxima oportunidade."
+      subtitle="Crie sua conta para reunir currículo, preferências de busca e candidaturas em um só lugar."
+      footerText="Já tem conta?"
+      footerHref="/login"
+      footerLabel="Fazer login"
+    >
+      <form onSubmit={handleRegister} style={{ display: "grid", gap: 16 }}>
+        {erro && (
           <div style={{
-            width: 52, height: 52, borderRadius: 14,
-            background: "linear-gradient(135deg, var(--accent), var(--purple))",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            margin: "0 auto 16px",
-            boxShadow: "0 8px 32px rgba(10,132,255,0.3)",
+            padding: "11px 13px",
+            borderRadius: 8,
+            background: "rgba(255,69,58,0.10)",
+            border: "1px solid rgba(255,69,58,0.24)",
+            color: "#FF7A72",
+            fontSize: 13,
+            lineHeight: 1.45,
           }}>
-            <svg width="24" height="24" fill="white" viewBox="0 0 24 24">
-              <path d="M20 6h-2.18c.07-.44.18-.86.18-1a2 2 0 00-2-2h-2a2 2 0 00-2 2c0 .14.11.56.18 1H10c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-7-1h2v2h-2V5zm-3 3h8v10H10V8z" />
-            </svg>
+            {erro}
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em" }}>Criar conta</h1>
-          <p style={{ fontSize: 14, color: "var(--text-secondary)", marginTop: 6 }}>Comece a automatizar suas candidaturas</p>
-        </div>
+        )}
 
-        <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-xl)", padding: 28, boxShadow: "var(--shadow-card)" }}>
-          <form onSubmit={handleRegister}>
-            {erro && (
-              <div style={{ marginBottom: 18, padding: "10px 14px", borderRadius: "var(--radius-sm)", background: "rgba(255,69,58,0.1)", border: "1px solid rgba(255,69,58,0.2)", color: "var(--red)", fontSize: 13 }}>
-                {erro}
-              </div>
-            )}
+        <AuthField label="Email">
+          <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required placeholder="seu@email.com" autoComplete="email" style={inputStyle} />
+        </AuthField>
 
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: "0.02em" }}>EMAIL</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required placeholder="seu@email.com" autoComplete="email" />
-            </div>
+        <AuthField label="Senha">
+          <input type="password" value={senha} onChange={(event) => setSenha(event.target.value)} required minLength={6} placeholder="Mínimo 6 caracteres" autoComplete="new-password" style={inputStyle} />
+        </AuthField>
 
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: "var(--text-secondary)", marginBottom: 6, letterSpacing: "0.02em" }}>SENHA</label>
-              <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} required minLength={6} placeholder="Mínimo 6 caracteres" autoComplete="new-password" />
-            </div>
-
-            <button type="submit" className="btn-primary" disabled={loading} style={{ width: "100%", padding: "12px 0", fontSize: 15, fontWeight: 600 }}>
-              {loading ? (
-                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
-                  <span className="animate-spin" style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%" }} />
-                  Criando...
-                </span>
-              ) : "Criar conta grátis"}
-            </button>
-          </form>
-        </div>
-
-        <p style={{ textAlign: "center", marginTop: 20, fontSize: 14, color: "var(--text-secondary)" }}>
-          Já tem conta?{" "}
-          <Link href="/login" style={{ color: "var(--accent)", fontWeight: 500 }}>Fazer login</Link>
-        </p>
-      </div>
-    </div>
+        <button type="submit" disabled={loading} style={primaryButtonStyle}>
+          {loading ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
+          {loading ? "Criando..." : "Criar conta"}
+        </button>
+      </form>
+    </AuthFrame>
   );
 }
+
+function AuthField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label style={{ display: "grid", gap: 7 }}>
+      <span style={{ color: "var(--text-tertiary)", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em" }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  width: "100%",
+  height: 48,
+  borderRadius: 8,
+  border: "1px solid var(--border)",
+  background: "var(--bg-input)",
+  color: "var(--text)",
+  padding: "0 14px",
+  fontSize: 15,
+  outline: "none",
+  fontFamily: "inherit",
+};
+
+const primaryButtonStyle: React.CSSProperties = {
+  height: 50,
+  borderRadius: 8,
+  border: "1px solid var(--accent)",
+  background: "var(--accent)",
+  color: "#07121c",
+  fontSize: 15,
+  fontWeight: 900,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 9,
+  marginTop: 6,
+  cursor: "pointer",
+  fontFamily: "inherit",
+};
+
+const linkButtonStyle: React.CSSProperties = {
+  height: 46,
+  borderRadius: 8,
+  background: "var(--accent)",
+  color: "#07121c",
+  fontSize: 14,
+  fontWeight: 900,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  textDecoration: "none",
+};

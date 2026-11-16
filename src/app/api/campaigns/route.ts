@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedAdmin } from "@/lib/admin";
 
 export async function GET() {
-  const supabase = createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = await createClient();
+  const { user, status } = await getAuthenticatedAdmin(supabase);
+  if (!user) return NextResponse.json({ error: status === 401 ? "Unauthorized" : "Admin access required" }, { status: status! });
   const { data, error } = await supabase.from("campaigns").select("*, services(name,category)").eq("user_id", user.id).order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ campaigns: data || [] });
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = await createClient();
+  const { user, status } = await getAuthenticatedAdmin(supabase);
+  if (!user) return NextResponse.json({ error: status === 401 ? "Unauthorized" : "Admin access required" }, { status: status! });
   const body = await req.json();
   const { id, ...fields } = body;
   const payload = { ...fields, user_id: user.id, updated_at: new Date().toISOString() };
@@ -28,9 +29,9 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const supabase = createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = await createClient();
+  const { user, status } = await getAuthenticatedAdmin(supabase);
+  if (!user) return NextResponse.json({ error: status === 401 ? "Unauthorized" : "Admin access required" }, { status: status! });
   const { searchParams } = new URL(req.url);
   const id = searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });

@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
-export default function Home() {
-  redirect("/login");
-}
+import Link from "next/link";
+import { ArrowRight, BriefcaseBusiness, FileText, Search, ShieldCheck } from "lucide-react";
+export default function Home(){return <main className="landing"><nav><Link href="/" className="landing-brand"><span><BriefcaseBusiness size={18}/></span>AutoCurrículo <b>AI</b></Link><div><Link href="/login">Entrar</Link><Link className="landing-cta small" href="/register">Criar conta</Link></div></nav><section className="landing-hero"><p className="landing-eyebrow">BUSCA PROFISSIONAL, SEM PERDER O CONTROLE</p><h1>Encontre oportunidades melhores.<br/><em>Organize sua carreira.</em></h1><p>Centralize currículo, preferências de busca e candidaturas em um espaço feito para acompanhar sua próxima etapa profissional.</p><div className="landing-actions"><Link className="landing-cta" href="/register">Começar agora <ArrowRight size={17}/></Link><Link className="landing-secondary" href="/login">Já tenho conta</Link></div></section><section className="landing-workflow"><div><span>01</span><FileText size={20}/><h2>Organize seu currículo</h2><p>Mantenha seu arquivo e suas preferências de busca associados à sua conta.</p></div><div><span>02</span><Search size={20}/><h2>Defina sua busca</h2><p>Inclua os cargos que procura e a região onde quer trabalhar.</p></div><div><span>03</span><ShieldCheck size={20}/><h2>Acompanhe candidaturas</h2><p>Consulte seus registros e os links originais das oportunidades.</p></div></section><footer><span>AutoCurrículo AI</span><span>Uma ferramenta para organizar sua busca de emprego.</span></footer></main>}

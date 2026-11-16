@@ -1,7 +1,7 @@
 /**
  * AutoCurriculo AI - Session Setup
  *
- * Abre o Chrome, voce faz login manualmente no LinkedIn/InfoJobs/Workana.
+ * Abre o Chrome, voce faz login manualmente no Indeed/LinkedIn/InfoJobs/Workana.
  * A sessao e salva e o bot usa ela para sempre sem precisar de senha.
  *
  * Uso: node setup-session.js
@@ -33,9 +33,9 @@ async function main() {
   console.log("========================================");
   console.log(" AutoCurriculo AI - Setup de Sessao");
   console.log("========================================\n");
-  console.log("Credenciais para usar:");
-  console.log("  Email: contato.digirocket@gmail.com");
-  console.log("  Senha: Zaihanna92@\n");
+  console.log("Use o metodo real de cada plataforma.");
+  console.log("Indeed normalmente deve ser feito por Google OAuth, nao por senha.");
+  console.log("Nao cole senha neste terminal. O script salva apenas cookies/sessao do navegador.\n");
 
   const executablePath = findChrome();
   if (!executablePath) {
@@ -60,29 +60,33 @@ async function main() {
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
-  // Abre LinkedIn
+  // Abre Indeed
   const p1 = await context.newPage();
-  await p1.goto("https://www.linkedin.com/login", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
-  console.log("[LinkedIn] Aberto — faca login com email e senha");
+  await p1.goto("https://br.indeed.com/account/login", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+  console.log("[Indeed] Aberto — faca login pelo Google OAuth ou metodo da sua conta");
+
+  // Abre LinkedIn
+  const p2 = await context.newPage();
+  await p2.goto("https://www.linkedin.com/login", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+  console.log("[LinkedIn] Aberto — faca login pelo metodo da sua conta");
 
   // Abre InfoJobs
-  const p2 = await context.newPage();
-  await p2.goto("https://www.infojobs.com.br/login.aspx", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
-  console.log("[InfoJobs] Aberto — faca login com email e senha");
+  const p3 = await context.newPage();
+  await p3.goto("https://www.infojobs.com.br/login.aspx", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+  console.log("[InfoJobs] Aberto — faca login pelo metodo da sua conta");
 
   // Abre Workana
-  const p3 = await context.newPage();
-  await p3.goto("https://www.workana.com/pt/login", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
-  console.log("[Workana] Aberto — faca login com email e senha");
+  const p4 = await context.newPage();
+  await p4.goto("https://www.workana.com/pt/login", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+  console.log("[Workana] Aberto — faca login pelo metodo da sua conta");
 
   console.log("\n========================================");
   console.log(" INSTRUCOES:");
-  console.log(" 1. Va em cada aba e faca login:");
-  console.log("    Email: contato.digirocket@gmail.com");
-  console.log("    Senha: Zaihanna92@");
-  console.log(" 2. Se pedir verificacao por email/SMS, confirme");
-  console.log(" 3. Aguarde estar logado em TODAS as 3 abas");
-  console.log(" 4. Volte aqui e pressione ENTER");
+  console.log(" 1. Va em cada aba e faca login manualmente");
+  console.log(" 2. No Indeed, use Google OAuth se sua conta foi criada pelo Google");
+  console.log(" 3. Se pedir verificacao por email/SMS/app, confirme");
+  console.log(" 4. Aguarde estar logado nas plataformas que voce usa");
+  console.log(" 5. Volte aqui e pressione ENTER");
   console.log("========================================\n");
 
   await aguardarEnter("Pressione ENTER quando estiver logado em todas as plataformas... ");

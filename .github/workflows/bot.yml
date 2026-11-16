@@ -3,29 +3,46 @@ name: AutoCurriculo AI Bot
 on:
   schedule:
     - cron: '0 12 * * 1-5'  # Seg-Sex 9h BRT (12h UTC)
-  workflow_dispatch:          # Manual trigger
+  workflow_dispatch:          # Manual trigger, scoped to the authenticated user
+    inputs:
+      user_id:
+        description: "Authenticated profile to process"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autocurriculo-bot-${{ github.event.inputs.user_id || 'scheduled' }}
+  cancel-in-progress: false
 
 jobs:
   run-bot:
-    runs-on: ubuntu-latest
+    # Playwright 1.60 currently supports Ubuntu 24.04, not the Ubuntu 26 image
+    # behind ubuntu-latest.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60       # Allow up to 60 min for 100+ applications
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install bot dependencies
         working-directory: bot-engine
-        run: npm install
+        run: npm ci
 
       - name: Install Playwright browsers
         working-directory: bot-engine
         run: npx playwright install chromium --with-deps
+
+      - name: Prepare bot log
+        run: mkdir -p /tmp && : > /tmp/bot-log.txt
 
       - name: Run bot
         working-directory: bot-engine
@@ -33,27 +50,24 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CONNECTION_ENCRYPTION_KEY: ${{ secrets.CONNECTION_ENCRYPTION_KEY }}
           BOT_API_KEY: ${{ secrets.BOT_API_KEY }}
           API_URL: ${{ secrets.API_URL }}
-          INDEED_EMAIL: ${{ secrets.INDEED_EMAIL }}
-          INDEED_SENHA: ${{ secrets.INDEED_SENHA }}
-          INFOJOBS_EMAIL: ${{ secrets.INFOJOBS_EMAIL }}
-          INFOJOBS_SENHA: ${{ secrets.INFOJOBS_SENHA }}
-          LINKEDIN_EMAIL: ${{ secrets.LINKEDIN_EMAIL }}
-          LINKEDIN_SENHA: ${{ secrets.LINKEDIN_SENHA }}
-          SESSION_STATE: ${{ secrets.SESSION_STATE }}
+          BOT_USER_ID: ${{ inputs.user_id }}
         run: node bot.js
 
       - name: Upload logs (always)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: bot-logs
           path: /tmp/bot-log.txt
+          if-no-files-found: warn
 
       - name: Upload debug screenshots (on failure)
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: error-screenshots
           path: /tmp/*.png
+          if-no-files-found: ignore

@@ -1,10 +1,10 @@
 /**
  * AutoCurriculo AI - Smoke Tests (Node.js)
  * Usage: node tests/smoke.js [VERCEL_URL]
- * Default: https://placeholder.vercel.app
+ * Default: https://autocurriculo-ai.vercel.app
  */
 
-const VERCEL_URL = process.argv[2] || "https://placeholder.vercel.app";
+const VERCEL_URL = process.argv[2] || "https://autocurriculo-ai.vercel.app";
 let pass = 0;
 let fail = 0;
 

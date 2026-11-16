@@ -1,28 +1,28 @@
 /**
  * AutoCurriculo AI - Bot Engine v3
  *
- * Plataformas CLT: Indeed, LinkedIn, InfoJobs, Catho, TrabalhaBrasil, Vagas.com, EmpregoLigado, Sine, TrabalheConosco
- * Plataformas Freelancer: Workana, GetNinjas, 99Freelas
- * Leads: Google Search + Google Maps + queries freelancer
+ * Plataformas de oportunidades: Indeed, InfoJobs, Catho, TrabalhaBrasil,
+ * Vagas.com, EmpregoLigado, Sine e páginas de carreira.
+ * Plataformas de projetos: Workana, GetNinjas e 99Freelas.
  *
- * Auth modes:
- *   MODE 1: SESSION_STATE (Google OAuth salvo, preferido)
- *   MODE 2: credenciais por usuario no banco Supabase (configuradas no dashboard)
- *   MODE 3: env vars (fallback admin)
+ * Auth mode: conexões cifradas e isoladas por usuário no Supabase.
+ *
+ * Nenhuma credencial é lida da tabela `profiles` ou de variáveis globais de
+ * plataforma. O LinkedIn não é automatizado: a própria plataforma proíbe
+ * automação de candidatura por terceiros.
  */
 
 const { chromium } = require("playwright");
 const path = require("path");
 const fs = require("fs");
-const zlib = require("zlib");
+const { createDecipheriv } = require("crypto");
 const fetch = require("node-fetch");
 
 const { log } = require("./utils/logger");
 
-// Plataformas CLT
+// Plataformas de oportunidades
 const { applyIndeed }        = require("./platforms/indeed");
 const { applyInfoJobs }      = require("./platforms/infojobs");
-const { applyLinkedIn }      = require("./platforms/linkedin");
 const { applyCatho }         = require("./platforms/catho");
 const { applyTrabalhaBrasil }= require("./platforms/trabalhabrasil");
 const { applyVagas }         = require("./platforms/vagas");
@@ -44,37 +44,34 @@ const { scrapeGoogleJobs }  = require("./platforms/googlejobs");
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const BOT_API_KEY = process.env.BOT_API_KEY;
+const CONNECTION_ENCRYPTION_KEY = process.env.CONNECTION_ENCRYPTION_KEY;
 // CRÍTICO: API_URL deve ser a URL do Vercel em produção, não localhost
 const API_URL = (process.env.API_URL || "").replace(/\/$/, "") || "https://autocurriculo-ai.vercel.app";
+// Direct final submission is deliberately disabled. The current platform
+// adapters have not been validated against a user-confirmed review flow.
+const ASSISTED_REVIEW_ONLY = true;
 
-/**
- * Load saved browser session from SESSION_STATE env var.
- * If present, browser starts already logged into Indeed/LinkedIn/InfoJobs.
- */
-function loadSessionState() {
-  const encoded = process.env.SESSION_STATE;
-  if (!encoded) {
-    log("[SESSION] SESSION_STATE nao configurado. Usando login email/senha.");
-    return null;
-  }
-  
-  try {
-    const compressed = Buffer.from(encoded, "base64");
-    const json = zlib.gunzipSync(compressed).toString("utf8");
-    const state = JSON.parse(json);
-    log(`[SESSION] Sessao carregada: ${state.cookies?.length || 0} cookies, ${Object.keys(state.origins || {}).length} origins`);
-    return state;
-  } catch (err) {
-    log(`[SESSION] Erro ao carregar sessao: ${err.message}. Usando email/senha.`);
-    return null;
-  }
+function decryptConnectionSecret(value) {
+  if (!CONNECTION_ENCRYPTION_KEY) throw new Error("CONNECTION_ENCRYPTION_KEY nao configurada");
+  const key = Buffer.from(CONNECTION_ENCRYPTION_KEY, "base64");
+  if (key.length !== 32) throw new Error("CONNECTION_ENCRYPTION_KEY deve ter 32 bytes em base64");
+
+  const packed = Buffer.isBuffer(value)
+    ? value
+    : Buffer.from(String(value).startsWith("\\x") ? String(value).slice(2) : String(value), "hex");
+  if (packed.length < 29) throw new Error("segredo de conexao invalido");
+
+  const decipher = createDecipheriv("aes-256-gcm", key, packed.subarray(0, 12));
+  decipher.setAuthTag(packed.subarray(12, 28));
+  return Buffer.concat([decipher.update(packed.subarray(28)), decipher.final()]).toString("utf8");
 }
 
 async function fetchUserProfiles() {
-  // Use service role key to read all active profiles including credentials
+  // Use the service role only inside the runner. Credentials live in the
+  // separate encrypted vault, never in profiles.
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
   const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?bot_ativo=eq.true&select=user_id,cargo,cidade,limite_diario,indeed_email,indeed_senha,linkedin_email,linkedin_senha,infojobs_email,infojobs_senha,catho_email,catho_senha,sine_email,sine_senha,workana_email,workana_senha,getninjas_email,getninjas_senha,freelas99_email,freelas99_senha`,
+    `${SUPABASE_URL}/rest/v1/profiles?bot_ativo=eq.true&select=user_id,cargo,cidade,limite_diario`,
     {
       headers: {
         apikey: key,
@@ -88,7 +85,44 @@ async function fetchUserProfiles() {
     return [];
   }
   
-  return await resp.json();
+  const profiles = await resp.json();
+  const requestedUserId = process.env.BOT_USER_ID;
+  return requestedUserId ? profiles.filter((profile) => profile.user_id === requestedUserId) : profiles;
+}
+
+async function fetchConnections(userIds) {
+  if (userIds.length === 0) return new Map();
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+  const ids = userIds.map((id) => `"${id}"`).join(",");
+  const resp = await fetch(
+    `${SUPABASE_URL}/rest/v1/platform_connections?status=eq.connected&select=user_id,platform,auth_mode,account_hint,encrypted_secret&user_id=in.(${encodeURIComponent(ids)})`,
+    { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+  );
+  if (!resp.ok) {
+    log(`[API] Erro ao buscar conexoes seguras: ${resp.status} ${resp.statusText}`);
+    return new Map();
+  }
+
+  const byUser = new Map();
+  for (const connection of await resp.json()) {
+    try {
+      const plaintext = decryptConnectionSecret(connection.encrypted_secret);
+      let credentials;
+      try {
+        credentials = JSON.parse(plaintext);
+      } catch {
+        // Backwards-compatible with the first vault format: the account hint
+        // carries only the login identifier and the encrypted value is the password.
+        credentials = { email: connection.account_hint, senha: plaintext };
+      }
+      if (!credentials?.email || !credentials?.senha) throw new Error("formato de conexao invalido");
+      if (!byUser.has(connection.user_id)) byUser.set(connection.user_id, new Map());
+      byUser.get(connection.user_id).set(connection.platform, credentials);
+    } catch (error) {
+      log(`[API] Conexao ${connection.platform} ignorada: ${error.message}`);
+    }
+  }
+  return byUser;
 }
 
 async function downloadCurriculo(userId) {
@@ -201,60 +235,8 @@ function expandirTermosBusca(cargo) {
   return lista;
 }
 
-function getPlatformCreds(platform, profile) {
-  // Priority: credentials stored in user's profile (set via dashboard)
-  // Fallback: env vars (legacy / admin override)
-  switch (platform) {
-    case "indeed":
-      if (profile.indeed_email && profile.indeed_senha)
-        return { email: profile.indeed_email, senha: profile.indeed_senha };
-      if (process.env.INDEED_EMAIL && process.env.INDEED_SENHA)
-        return { email: process.env.INDEED_EMAIL, senha: process.env.INDEED_SENHA };
-      break;
-    case "infojobs":
-      if (profile.infojobs_email && profile.infojobs_senha)
-        return { email: profile.infojobs_email, senha: profile.infojobs_senha };
-      if (process.env.INFOJOBS_EMAIL && process.env.INFOJOBS_SENHA)
-        return { email: process.env.INFOJOBS_EMAIL, senha: process.env.INFOJOBS_SENHA };
-      break;
-    case "linkedin":
-      if (profile.linkedin_email && profile.linkedin_senha)
-        return { email: profile.linkedin_email, senha: profile.linkedin_senha };
-      if (process.env.LINKEDIN_EMAIL && process.env.LINKEDIN_SENHA)
-        return { email: process.env.LINKEDIN_EMAIL, senha: process.env.LINKEDIN_SENHA };
-      break;
-    case "catho":
-      if (profile.catho_email && profile.catho_senha)
-        return { email: profile.catho_email, senha: profile.catho_senha };
-      if (process.env.CATHO_EMAIL && process.env.CATHO_SENHA)
-        return { email: process.env.CATHO_EMAIL, senha: process.env.CATHO_SENHA };
-      break;
-    case "sine":
-      if (profile.sine_email && profile.sine_senha)
-        return { email: profile.sine_email, senha: profile.sine_senha };
-      if (process.env.SINE_EMAIL && process.env.SINE_SENHA)
-        return { email: process.env.SINE_EMAIL, senha: process.env.SINE_SENHA };
-      break;
-    case "workana":
-      if (profile.workana_email && profile.workana_senha)
-        return { email: profile.workana_email, senha: profile.workana_senha };
-      if (process.env.WORKANA_EMAIL && process.env.WORKANA_SENHA)
-        return { email: process.env.WORKANA_EMAIL, senha: process.env.WORKANA_SENHA };
-      break;
-    case "getninjas":
-      if (profile.getninjas_email && profile.getninjas_senha)
-        return { email: profile.getninjas_email, senha: profile.getninjas_senha };
-      if (process.env.GETNINJAS_EMAIL && process.env.GETNINJAS_SENHA)
-        return { email: process.env.GETNINJAS_EMAIL, senha: process.env.GETNINJAS_SENHA };
-      break;
-    case "99freelas":
-      if (profile.freelas99_email && profile.freelas99_senha)
-        return { email: profile.freelas99_email, senha: profile.freelas99_senha };
-      if (process.env.FREELAS99_EMAIL && process.env.FREELAS99_SENHA)
-        return { email: process.env.FREELAS99_EMAIL, senha: process.env.FREELAS99_SENHA };
-      break;
-  }
-  return null;
+function getPlatformCreds(platform, connections) {
+  return connections.get(platform) || null;
 }
 
 async function main() {
@@ -269,10 +251,6 @@ async function main() {
     return;
   }
 
-  // Load session state or fallback to email/senha
-  const sessionState = loadSessionState();
-  const hasSession = !!sessionState;
-
   const profiles = await fetchUserProfiles();
   log(`[BOT] ${profiles.length} profiles ativos encontrados`);
 
@@ -281,41 +259,36 @@ async function main() {
     return;
   }
 
-  const indeedCreds = hasSession ? { session: true } : null;
-  const infojobsCreds = hasSession ? { session: true } : null;
-  const linkedinCreds = hasSession ? { session: true } : null;
-
-  log(`[BOT] Modo: ${hasSession ? "SESSAO (Google OAuth)" : "EMAIL/SENHA (por perfil)"}`);
-  log(`[BOT] Sem login: TrabalhaBrasil, Vagas.com, TrabalheConosco`);
-
-  // Create browser context options
-  const contextOptions = {
-    viewport: { width: 1366, height: 768 },
-    locale: "pt-BR",
-  };
-  
-  // If session state exists, inject it into the context
-  if (sessionState) {
-    contextOptions.storageState = sessionState;
+  if (!CONNECTION_ENCRYPTION_KEY) {
+    log("[ERRO] CONNECTION_ENCRYPTION_KEY nao configurada; conexoes por senha foram bloqueadas.");
   }
+  const connectionsByUser = CONNECTION_ENCRYPTION_KEY
+    ? await fetchConnections(profiles.map((profile) => profile.user_id))
+    : new Map();
+  log("[BOT] Modo: contexto isolado por perfil e conexoes individuais cifradas.");
 
   const browser = await chromium.launch({
     headless: true,
     args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
   });
 
-  // Create shared authenticated context for platforms with login
-  const authContext = await browser.newContext(contextOptions);
-
   try {
     for (const profile of profiles) {
       const userId = profile.user_id;
-      const cargoBase = profile.cargo || "gestor de trafego";
+      const userConnections = connectionsByUser.get(userId) || new Map();
+      // Never share cookies between accounts. Global SESSION_STATE is deliberately
+      // not applied because it cannot be safely associated with a specific user.
+      const authContext = await browser.newContext({
+        viewport: { width: 1366, height: 768 },
+        locale: "pt-BR",
+      });
+      const cargoes = String(profile.cargo || "gestor de trafego").split(/[,;\n]/).map((cargo) => cargo.trim()).filter(Boolean);
+      const cargoBase = cargoes[0] || "gestor de trafego";
       const cidade = profile.cidade || "";
       const limiteDiario = profile.limite_diario || 100;
 
       // Expandir termos de busca baseado no cargo principal
-      const termosRelacionados = expandirTermosBusca(cargoBase);
+      const termosRelacionados = [...new Set(cargoes.flatMap(expandirTermosBusca))].slice(0, 18);
       const limitePorTermo = Math.ceil(limiteDiario / termosRelacionados.length);
 
       log(`[BOT] User ${userId}: cargo="${cargoBase}", termos=${termosRelacionados.length}, limite=${limiteDiario}`);
@@ -323,26 +296,16 @@ async function main() {
 
       // Resolve credentials per-profile (from DB or env fallback)
   // Se hasSession, ainda assim passa as credenciais do perfil como fallback
-  const profileIndeedCreds   = hasSession
-    ? { session: true, ...getPlatformCreds("indeed",    profile) }
-    : getPlatformCreds("indeed",    profile);
-  const profileLinkedinCreds = hasSession
-    ? { session: true, ...getPlatformCreds("linkedin",  profile) }
-    : getPlatformCreds("linkedin",  profile);
-  const profileInfojobsCreds = hasSession
-    ? { session: true, ...getPlatformCreds("infojobs",  profile) }
-    : getPlatformCreds("infojobs",  profile);
-  const profileCathoCreds    = hasSession
-    ? { session: true, ...getPlatformCreds("catho",     profile) }
-    : getPlatformCreds("catho",     profile);
-  const profileSineCreds     = getPlatformCreds("sine",      profile);
-  const profileWorkanaCreds  = getPlatformCreds("workana",   profile);
-  const profileNinjasCreds   = getPlatformCreds("getninjas", profile);
-  const profileFreelas99Creds= getPlatformCreds("99freelas", profile);
+      const profileIndeedCreds   = getPlatformCreds("indeed", userConnections);
+      const profileInfojobsCreds = getPlatformCreds("infojobs", userConnections);
+      const profileCathoCreds    = getPlatformCreds("catho", userConnections);
+      const profileSineCreds     = getPlatformCreds("sine", userConnections);
+      const profileWorkanaCreds  = getPlatformCreds("workana", userConnections);
+      const profileNinjasCreds   = getPlatformCreds("getninjas", userConnections);
+      const profileFreelas99Creds= getPlatformCreds("freelas99", userConnections);
 
       log(`[BOT] Plataformas com login: ${[
         profileIndeedCreds   && "Indeed",
-        profileLinkedinCreds && "LinkedIn",
         profileInfojobsCreds && "InfoJobs",
         profileCathoCreds    && "Catho",
         profileSineCreds     && "Sine",
@@ -354,12 +317,31 @@ async function main() {
       const cvPath = await downloadCurriculo(userId);
       if (!cvPath) {
         log(`[AVISO] Pulando user ${userId}: sem curriculo`);
+        await authContext.close();
+        continue;
+      }
+
+      if (ASSISTED_REVIEW_ONLY) {
+        log("[BOT] Modo assistido: envio final desativado. Nenhuma candidatura será enviada sem revisão humana.");
+        try {
+          const discovered = await scrapeGoogleJobs(browser, {
+            cargo: cargoBase,
+            cidade,
+            limiteDiario: Math.min(limiteDiario, 30),
+          });
+          log(`[BOT] Descoberta assistida: ${discovered.length} oportunidade(s) encontradas para revisão.`);
+        } catch (error) {
+          log(`[BOT] Descoberta assistida falhou: ${error.message}`);
+        } finally {
+          await authContext.close();
+          fs.unlinkSync(cvPath);
+        }
         continue;
       }
 
       const allResults = [];
 
-      // ── PLATAFORMAS CLT COM LOGIN ──────────────────────────────────────────
+      // ── PLATAFORMAS COM CONEXÃO INDIVIDUAL ─────────────────────────────────
 
       if (profileIndeedCreds) {
         log("[BOT] Indeed...");
@@ -388,58 +370,6 @@ async function main() {
         log(`[BOT] InfoJobs total: ${allResults.filter(r=>r.plataforma==="InfoJobs").length} resultados`);
       }
 
-      if (profileLinkedinCreds) {
-        // Login LinkedIn uma unica vez com timeout máximo de 30s
-        log("[BOT] LinkedIn: fazendo login...");
-        const linkedinPage = await authContext.newPage();
-        let linkedinLogado = false;
-        try {
-          await linkedinPage.goto("https://www.linkedin.com/login", { waitUntil: "domcontentloaded", timeout: 30000 });
-          await linkedinPage.waitForTimeout(3000);
-
-          for (const sel of ["#username", 'input[name="session_key"]', 'input[autocomplete="username"]']) {
-            const el = await linkedinPage.$(sel);
-            if (el) {
-              await linkedinPage.fill(sel, profileLinkedinCreds.email);
-              linkedinLogado = true;
-              break;
-            }
-          }
-          if (linkedinLogado) {
-            await linkedinPage.fill('input[type="password"]', profileLinkedinCreds.senha).catch(() => {});
-            await linkedinPage.click('button[type="submit"]').catch(() => {});
-            // Aguarda redirecionamento com timeout curto — não bloqueia o bot se demorar
-            await linkedinPage.waitForURL("**/feed**", { timeout: 15000 }).catch(() => {});
-            await linkedinPage.waitForTimeout(3000);
-
-            const finalUrl = linkedinPage.url();
-            if (finalUrl.includes("/checkpoint") || finalUrl.includes("/login") || finalUrl.includes("/authwall")) {
-              log("[BOT] LinkedIn: bloqueado por captcha/checkpoint. Pulando.");
-              linkedinLogado = false;
-            } else {
-              log(`[BOT] LinkedIn: login OK (${finalUrl.slice(0, 60)})`);
-            }
-          }
-        } catch (e) {
-          log(`[BOT] LinkedIn login timeout/erro: ${e.message.slice(0, 80)}`);
-          linkedinLogado = false;
-        } finally {
-          await linkedinPage.close().catch(() => {});
-        }
-
-        if (linkedinLogado) {
-          for (const termo of termosRelacionados) {
-            log(`[BOT] LinkedIn: "${termo}"...`);
-            const r = await applyLinkedIn(browser, authContext, {
-              session: true,
-              cargo: termo, cidade, curriculoPath: cvPath, limiteDiario: limitePorTermo,
-            });
-            allResults.push(...r);
-          }
-          log(`[BOT] LinkedIn total: ${allResults.filter(r=>r.plataforma==="LinkedIn").length} resultados`);
-        }
-      }
-
       if (profileCathoCreds) {
         for (const termo of termosRelacionados) {
           log(`[BOT] Catho: "${termo}"...`);
@@ -466,7 +396,7 @@ async function main() {
         log(`[BOT] Sine total: ${allResults.filter(r=>r.plataforma==="Sine").length} resultados`);
       }
 
-      // ── PLATAFORMAS CLT SEM LOGIN ──────────────────────────────────────────
+      // ── FONTES PÚBLICAS E PÁGINAS DE CARREIRA ──────────────────────────────
 
       for (const termo of termosRelacionados) {
         log(`[BOT] TrabalhaBrasil: "${termo}"...`);
@@ -575,7 +505,6 @@ async function main() {
   } catch (err) {
     log(`[ERRO CRITICO] ${err.message}`);
   } finally {
-    await authContext.close();
     await browser.close();
     log("[BOT] Finalizado.");
   }

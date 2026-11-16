@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedAdmin } from "@/lib/admin";
+import { buildMarketplaceCopy } from "@/lib/marketplace-copy";
 
 // Gerador de panfletos digitais com IA (sem dependência de OpenAI — usa template engine inteligente)
 // Para integrar OpenAI/Groq no futuro, substituir as funções generate* abaixo
@@ -111,9 +113,9 @@ function generateWhatsApp(service: Record<string, string>): string[] {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = await createClient();
+  const { user, status } = await getAuthenticatedAdmin(supabase);
+  if (!user) return NextResponse.json({ error: status === 401 ? "Unauthorized" : "Admin access required" }, { status: status! });
 
   const { service_id, campaign_id, tone: _tone = "profissional" } = await req.json();
   const tone = _tone as string;
@@ -129,6 +131,8 @@ export async function POST(req: NextRequest) {
     descricoes_curtas: generateShortDescs(svc),
     ctas: generateCTAs(),
     olx: generateOLX(svc),
+    mercado_livre: [buildMarketplaceCopy("mercado_livre", svc, tone).long_description],
+    ggmax: [buildMarketplaceCopy("ggmax", svc, tone).long_description],
     facebook: generateFacebook(svc),
     workana: generateWorkana(svc),
     whatsapp: generateWhatsApp(svc),

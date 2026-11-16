@@ -42,7 +42,10 @@ next-env.d.ts
 # local test/debug scripts
 test-all.js
 supabase/setup_completo.sql
+supabase/.temp/
 bot-engine/curriculo_*.pdf
 bot-engine/session-state.json
 bot-engine/session-state.b64
+.github/secrets.txt
+*.session.json
 /tmp/*.png

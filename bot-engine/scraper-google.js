@@ -52,7 +52,7 @@ async function scrapeGoogleLeads(browser, config) {
     "vagas.com", "trabalhabrasil.com", "sine.com", "empregoligado.com",
     "workana.com", "99freelas.com", "getninjas.com", "freelancer.com",
     "upwork.com", "fiverr.com", "trampos.co", "glassdoor.com",
-    "gupy.io", "kenoby.com", "abler.com.br",
+    "kenoby.com", "abler.com.br",
     "youtube.com", "facebook.com", "instagram.com", "twitter.com",
     "reddit.com", "quora.com", "medium.com", "wikipedia.org",
   ];

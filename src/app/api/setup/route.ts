@@ -1,11 +1,18 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { hasAdminAccess } from "@/lib/admin";
 
 // ONE-TIME SETUP ENDPOINT
 // Acesse: http://localhost:3000/api/setup
 // Isso cria todas as tabelas necessárias via Supabase Admin Client
 
 export async function GET() {
+  const sessionClient = await createClient();
+  const { data: { user }, error: authError } = await sessionClient.auth.getUser();
+  if (authError || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!await hasAdminAccess(sessionClient, user)) return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+
   const supabase = createAdminClient();
   const results: Record<string, string> = {};
 
@@ -26,7 +33,7 @@ export async function GET() {
       );
       ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
     `});
-  } catch (_) {}
+  } catch {}
 
   // Test what exists by trying to select from each table
   const tables = [

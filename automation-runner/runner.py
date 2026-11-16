@@ -137,11 +137,99 @@ async def run_facebook_marketplace(page, task: dict):
     return {"screenshot": screenshot, "message": "Marketplace Facebook aberto. Complete e confirme antes de publicar."}
 
 
+async def try_fill_first(page, selectors, value: str):
+    """Best-effort fill for marketplaces that change labels often."""
+    if not value:
+        return False
+    for sel in selectors:
+        try:
+            el = await page.query_selector(sel)
+            if el:
+                await el.fill(value)
+                return True
+        except Exception:
+            continue
+    return False
+
+
+async def run_generic_marketplace(page, task: dict, default_url: str, label: str):
+    """Open a marketplace form and fill common fields when visible."""
+    pq = task.get("publishing_queue", {})
+    pamphlet = pq.get("generated_pamphlets", {}) or {}
+    channel = pq.get("channels", {}) or {}
+    service = pq.get("services", {}) or {}
+
+    url = channel.get("url") or default_url
+    await page.goto(url, wait_until="domcontentloaded", timeout=45000)
+    await asyncio.sleep(4)
+
+    title = (pamphlet.get("title") or service.get("name") or "")[:100]
+    description = (pamphlet.get("long_description") or "")[:1800]
+    price = str(pamphlet.get("price_text") or service.get("price_min") or "")
+
+    filled = {
+        "title": await try_fill_first(page, [
+            'input[name*="title" i]',
+            'input[id*="title" i]',
+            'input[placeholder*="título" i]',
+            'input[placeholder*="titulo" i]',
+            'input[aria-label*="título" i]',
+            'input[aria-label*="titulo" i]',
+            'input[name*="nome" i]',
+        ], title),
+        "description": await try_fill_first(page, [
+            'textarea[name*="description" i]',
+            'textarea[id*="description" i]',
+            'textarea[placeholder*="descrição" i]',
+            'textarea[placeholder*="descricao" i]',
+            'textarea[aria-label*="descrição" i]',
+            'textarea[aria-label*="descricao" i]',
+            'textarea',
+        ], description),
+        "price": await try_fill_first(page, [
+            'input[name*="price" i]',
+            'input[id*="price" i]',
+            'input[placeholder*="preço" i]',
+            'input[placeholder*="preco" i]',
+            'input[aria-label*="preço" i]',
+            'input[aria-label*="preco" i]',
+            'input[inputmode="decimal"]',
+            'input[type="number"]',
+        ], price),
+    }
+
+    screenshot = await take_screenshot(page)
+    return {
+        "screenshot": screenshot,
+        "filled": filled,
+        "message": f"{label} aberto. Campos visíveis preenchidos quando encontrados. Revise login, categoria, imagens e confirme manualmente antes de publicar."
+    }
+
+
+async def run_mercado_livre(page, task: dict):
+    return await run_generic_marketplace(page, task, "https://www.mercadolivre.com.br/anuncie", "Mercado Livre")
+
+
+async def run_ggmax(page, task: dict):
+    return await run_generic_marketplace(page, task, "https://ggmax.com.br/dashboard/anuncios", "GGMAX")
+
+
+async def run_99freelas(page, task: dict):
+    return await run_generic_marketplace(page, task, "https://www.99freelas.com.br/projects", "99Freelas")
+
+
+async def run_getninjas(page, task: dict):
+    return await run_generic_marketplace(page, task, "https://www.getninjas.com.br/entrar", "GetNinjas")
+
+
 PLATFORM_RUNNERS = {
+    "mercado_livre": run_mercado_livre,
+    "ggmax": run_ggmax,
     "olx": run_olx,
     "facebook_marketplace": run_facebook_marketplace,
     "workana": run_workana,
-    "99freelas": run_workana,  # mesma lógica de navegação
+    "99freelas": run_99freelas,
+    "getninjas": run_getninjas,
 }
 
 # ── Task processor ────────────────────────────────────────────────────────────
