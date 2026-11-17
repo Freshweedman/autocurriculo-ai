@@ -17,7 +17,7 @@ export async function GET() {
   }
 
   const selectCols = [
-    "cargo", "cidade", "limite_diario", "bot_ativo",
+    "cargo", "cidade", "limite_diario", "bot_ativo", "direct_submission_enabled",
     ...PLATFORM_KEYS.map((k) => `${k}_email`),
   ].join(", ");
 
@@ -46,6 +46,7 @@ export async function GET() {
     cidade: profile?.cidade || "",
     limite_diario: profile?.limite_diario || 5,
     bot_ativo: profile?.bot_ativo || false,
+    direct_submission_enabled: profile?.direct_submission_enabled || false,
     plataformas,
   });
 }
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
   if (body.cidade       !== undefined) payload.cidade        = body.cidade;
   if (body.limite_diario !== undefined) payload.limite_diario = body.limite_diario;
   if (body.bot_ativo    !== undefined) payload.bot_ativo     = body.bot_ativo;
+  if (body.direct_submission_enabled !== undefined) payload.direct_submission_enabled = body.direct_submission_enabled === true;
 
   // Legacy account hints remain readable during migration; plaintext passwords are rejected.
   for (const key of PLATFORM_KEYS) {

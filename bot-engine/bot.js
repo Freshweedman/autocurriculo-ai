@@ -48,9 +48,9 @@ const BOT_API_KEY = process.env.BOT_API_KEY;
 const CONNECTION_ENCRYPTION_KEY = process.env.CONNECTION_ENCRYPTION_KEY;
 // CRÍTICO: API_URL deve ser a URL do Vercel em produção, não localhost
 const API_URL = (process.env.API_URL || "").replace(/\/$/, "") || "https://autocurriculo-ai.vercel.app";
-// Direct final submission is deliberately disabled. The current platform
-// adapters have not been validated against a user-confirmed review flow.
-const ASSISTED_REVIEW_ONLY = true;
+// Submission is allowed only for a dashboard-triggered run whose owner has
+// explicitly opted in. Scheduled work is always discovery-only.
+const ASSISTED_REVIEW_ONLY = false;
 
 function decryptConnectionSecret(value) {
   if (!CONNECTION_ENCRYPTION_KEY) throw new Error("CONNECTION_ENCRYPTION_KEY nao configurada");
@@ -78,7 +78,7 @@ async function fetchUserProfiles() {
     ? `user_id=eq.${encodeURIComponent(requestedUserId)}`
     : "bot_ativo=eq.true";
   const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?${profileFilter}&select=user_id,cargo,cidade,limite_diario`,
+    `${SUPABASE_URL}/rest/v1/profiles?${profileFilter}&select=user_id,cargo,cidade,limite_diario,direct_submission_enabled`,
     {
       headers: {
         apikey: key,
@@ -312,6 +312,7 @@ async function main() {
       const cargoBase = cargoes[0] || "gestor de trafego";
       const cidade = profile.cidade || "";
       const limiteDiario = profile.limite_diario || 100;
+      const directSubmissionEnabled = !ASSISTED_REVIEW_ONLY && profile.direct_submission_enabled === true && Boolean(process.env.BOT_USER_ID);
 
       // Expandir termos de busca baseado no cargo principal
       const termosRelacionados = [...new Set(cargoes.flatMap(expandirTermosBusca))].slice(0, 18);
@@ -347,7 +348,7 @@ async function main() {
         continue;
       }
 
-      if (ASSISTED_REVIEW_ONLY) {
+      if (!directSubmissionEnabled) {
         log("[BOT] Modo assistido: envio final desativado. Nenhuma candidatura será enviada sem revisão humana.");
         try {
           const googleJobs = await scrapeGoogleJobs(browser, {

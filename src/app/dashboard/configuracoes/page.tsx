@@ -83,6 +83,7 @@ export default function ConfiguracoesPage() {
   const [cidade, setCidade]             = useState("");
   const [limiteDiario, setLimiteDiario] = useState(5);
   const [botAtivo, setBotAtivo]         = useState(false);
+  const [directSubmission, setDirectSubmission] = useState(false);
   const [loading, setLoading]           = useState(false);
   const [cvUploaded, setCvUploaded]     = useState(false);
   const [resumes, setResumes]           = useState<Array<{ id: string; name: string; is_default: boolean }>>([]);
@@ -102,6 +103,7 @@ export default function ConfiguracoesPage() {
     setCidade(data.cidade || "");
     setLimiteDiario(data.limite_diario || 5);
     setBotAtivo(data.bot_ativo ?? false);
+    setDirectSubmission(data.direct_submission_enabled ?? false);
 
     const updated = initialPlataformas();
     for (const p of PLATFORMS) {
@@ -127,7 +129,7 @@ export default function ConfiguracoesPage() {
     await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cargo, cidade, limite_diario: limiteDiario, bot_ativo: botAtivo }),
+      body: JSON.stringify({ cargo, cidade, limite_diario: limiteDiario, bot_ativo: botAtivo, direct_submission_enabled: directSubmission }),
     });
     setSalvo(true);
     setLoading(false);
@@ -232,6 +234,11 @@ export default function ConfiguracoesPage() {
               <div className="text-muted" style={{ fontSize: 13 }}>Consulta fontes configuradas em dias úteis. O envio final exige sua revisão.</div>
             </div>
             <Toggle value={botAtivo} onChange={setBotAtivo} />
+          </div>
+
+          <div className="direct-submission-setting">
+            <div><div style={{ fontWeight: 650, fontSize: 14 }}>Permitir envio direto nas conexões habilitadas</div><div className="text-muted" style={{ fontSize: 12 }}>Só vale quando você inicia manualmente a automação. O agendamento nunca envia candidaturas.</div></div>
+            <Toggle value={directSubmission} onChange={setDirectSubmission} />
           </div>
 
           <button className="btn-primary" onClick={handleSave} disabled={loading}
