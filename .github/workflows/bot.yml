@@ -42,7 +42,7 @@ jobs:
         run: npx playwright install chromium --with-deps
 
       - name: Prepare bot log
-        run: mkdir -p /tmp && : > /tmp/bot-log.txt
+        run: "mkdir -p /tmp && : > /tmp/bot-log.txt"
 
       - name: Run bot
         working-directory: bot-engine
