@@ -39,6 +39,7 @@ const { apply99Freelas } = require("./platforms/99freelas");
 // Leads
 const { scrapeGoogleLeads } = require("./scraper-google");
 const { scrapeGoogleJobs }  = require("./platforms/googlejobs");
+const { discoverPublicBoards } = require("./platforms/publicboards");
 
 // Config from environment
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -349,11 +350,13 @@ async function main() {
       if (ASSISTED_REVIEW_ONLY) {
         log("[BOT] Modo assistido: envio final desativado. Nenhuma candidatura será enviada sem revisão humana.");
         try {
-          const discovered = await scrapeGoogleJobs(browser, {
+          const googleJobs = await scrapeGoogleJobs(browser, {
             cargo: cargoBase,
             cidade,
             limiteDiario: Math.min(limiteDiario, 30),
           });
+          const publicBoards = await discoverPublicBoards({ cargo: termosRelacionados.join(", "), limiteDiario: Math.min(limiteDiario, 30) });
+          const discovered = [...new Map([...googleJobs, ...publicBoards].map((job) => [job.vaga_url, job])).values()];
           log(`[BOT] Descoberta assistida: ${discovered.length} oportunidade(s) encontradas para revisão.`);
           await reportOpportunities(userId, discovered);
         } catch (error) {
