@@ -70,8 +70,14 @@ async function fetchUserProfiles() {
   // Use the service role only inside the runner. Credentials live in the
   // separate encrypted vault, never in profiles.
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+  const requestedUserId = process.env.BOT_USER_ID;
+  // Scheduled runs honour the preference. A manual dashboard request is an
+  // explicit action and must work even when the schedule is switched off.
+  const profileFilter = requestedUserId
+    ? `user_id=eq.${encodeURIComponent(requestedUserId)}`
+    : "bot_ativo=eq.true";
   const resp = await fetch(
-    `${SUPABASE_URL}/rest/v1/profiles?bot_ativo=eq.true&select=user_id,cargo,cidade,limite_diario`,
+    `${SUPABASE_URL}/rest/v1/profiles?${profileFilter}&select=user_id,cargo,cidade,limite_diario`,
     {
       headers: {
         apikey: key,
@@ -85,9 +91,7 @@ async function fetchUserProfiles() {
     return [];
   }
   
-  const profiles = await resp.json();
-  const requestedUserId = process.env.BOT_USER_ID;
-  return requestedUserId ? profiles.filter((profile) => profile.user_id === requestedUserId) : profiles;
+  return resp.json();
 }
 
 async function fetchConnections(userIds) {
@@ -128,8 +132,14 @@ async function fetchConnections(userIds) {
 async function downloadCurriculo(userId) {
   // Usa service role key para acessar storage privado
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+  const resumeResponse = await fetch(
+    `${SUPABASE_URL}/rest/v1/resumes?user_id=eq.${encodeURIComponent(userId)}&select=storage_path,is_default,created_at&order=is_default.desc,created_at.desc&limit=1`,
+    { headers: { apikey: key, Authorization: `Bearer ${key}` } }
+  );
+  const resumeRows = resumeResponse.ok ? await resumeResponse.json() : [];
+  const storagePath = resumeRows[0]?.storage_path || `${userId}/curriculo.pdf`;
   const resp = await fetch(
-    `${SUPABASE_URL}/storage/v1/object/curriculos/${userId}/curriculo.pdf`,
+    `${SUPABASE_URL}/storage/v1/object/curriculos/${storagePath}`,
     { headers: { apikey: key, Authorization: `Bearer ${key}` } }
   );
 
@@ -164,6 +174,21 @@ async function reportResults(userId, applications) {
     }
   } catch (err) {
     log(`[API] Erro ao reportar: ${err.message}`);
+  }
+}
+
+async function reportOpportunities(userId, opportunities) {
+  if (!opportunities.length) return;
+  try {
+    const response = await fetch(`${API_URL}/api/webhook/opportunities`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: BOT_API_KEY, userId, opportunities }),
+    });
+    if (response.ok) log(`[API] ${opportunities.length} oportunidade(s) registradas para revisão.`);
+    else log(`[API] Erro ao registrar oportunidades: ${response.status}`);
+  } catch (error) {
+    log(`[API] Erro ao registrar oportunidades: ${error.message}`);
   }
 }
 
@@ -330,6 +355,7 @@ async function main() {
             limiteDiario: Math.min(limiteDiario, 30),
           });
           log(`[BOT] Descoberta assistida: ${discovered.length} oportunidade(s) encontradas para revisão.`);
+          await reportOpportunities(userId, discovered);
         } catch (error) {
           log(`[BOT] Descoberta assistida falhou: ${error.message}`);
         } finally {

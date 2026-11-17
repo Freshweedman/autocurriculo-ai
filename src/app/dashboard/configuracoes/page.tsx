@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 // ─── Platform definitions ─────────────────────────────────────────────────────
 
 const PLATFORMS = [
-  { key: "indeed",    nome: "Indeed",         icon: "I", tipo: "emprego",   googleLogin: true,  descricao: "Conexão individual para a sua conta" },
+  { key: "indeed",    nome: "Indeed",         icon: "I", tipo: "emprego",   googleLogin: true,  descricao: "Login concluído no Indeed", manualOnly: true, loginUrl: "https://secure.indeed.com/account/login" },
   { key: "linkedin",  nome: "LinkedIn",       icon: "in", tipo: "emprego",  googleLogin: true,  descricao: "A candidatura é concluída no LinkedIn", manualOnly: true, loginUrl: "https://www.linkedin.com/login" },
   { key: "infojobs",  nome: "InfoJobs",       icon: "IJ", tipo: "emprego",  googleLogin: false, descricao: "Plataforma brasileira de oportunidades" },
   { key: "catho",     nome: "Catho",          icon: "C", tipo: "emprego",   googleLogin: false, descricao: "Plataforma brasileira de oportunidades" },
@@ -342,7 +342,7 @@ function PlatformCard({
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {label.manualOnly ? (
-            <a className="btn-outline" href={label.loginUrl} target="_blank" rel="noreferrer" style={{ padding: "5px 10px", fontSize: 12 }}>Abrir LinkedIn</a>
+            <a className="btn-outline" href={label.loginUrl} target="_blank" rel="noreferrer" style={{ padding: "5px 10px", fontSize: 12 }}>Abrir {label.nome}</a>
           ) : cred.configurado && !cred.editando ? (
             <>
               <span className="badge badge-success" style={{ fontSize: 11 }}>Conectada</span>
@@ -361,7 +361,7 @@ function PlatformCard({
       {/* Form */}
       {label.manualOnly ? (
         <div style={{ padding: 16, borderTop: "1px solid var(--border)", fontSize: 13, color: "var(--text-muted)", lineHeight: 1.6 }}>
-          Entre na sua conta em uma nova aba e conclua as candidaturas diretamente no LinkedIn. O AutoCurrículo não coleta senha, cookies ou tenta burlar verificações da plataforma.
+          Entre na sua conta em uma nova aba e conclua a candidatura na plataforma. O AutoCurrículo não coleta senha, cookies ou tenta burlar verificações. Uma integração OAuth só é possível quando a plataforma aprovar e fornecer credenciais oficiais ao produto.
         </div>
       ) : cred.editando && (
         <div style={{ padding: 16, borderTop: "1px solid var(--border)" }}>
