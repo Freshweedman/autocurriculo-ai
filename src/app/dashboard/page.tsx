@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/client";
 
 type Application = { id: string; empresa: string | null; vaga: string | null; plataforma: string; status: string; created_at: string; vaga_url: string | null };
 type Metric = { label: string; value: number | null; detail: string };
+const TECHNICAL_ATTEMPTS = ["falhou", "sem_file_input", "sem_submit", "nao_suportado", "duplicado"];
 
 export default function DashboardPage() {
   const [apps, setApps] = useState<Application[]>([]);
@@ -19,9 +20,9 @@ export default function DashboardPage() {
     if (!user) { setLoading(false); return; }
     const [profile, applications, total, sent, saved] = await Promise.all([
       supabase.from("profiles").select("cargo").eq("user_id", user.id).maybeSingle(),
-      supabase.from("applications").select("id,empresa,vaga,plataforma,status,created_at,vaga_url").eq("user_id", user.id).order("created_at", { ascending: false }).limit(5),
-      supabase.from("applications").select("*", { count: "exact", head: true }).eq("user_id", user.id),
-      supabase.from("applications").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "enviado"),
+      supabase.from("applications").select("id,empresa,vaga,plataforma,status,created_at,vaga_url").eq("user_id", user.id).not("status", "in", `(${TECHNICAL_ATTEMPTS.join(",")})`).order("created_at", { ascending: false }).limit(5),
+      supabase.from("applications").select("*", { count: "exact", head: true }).eq("user_id", user.id).not("status", "in", `(${TECHNICAL_ATTEMPTS.join(",")})`),
+      supabase.from("applications").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "confirmed"),
       supabase.from("user_opportunities").select("*", { count: "exact", head: true }).eq("user_id", user.id).eq("status", "saved"),
     ]);
     const configuredRoles = profile.data?.cargo ? profile.data.cargo.split(/[,;\n]/).filter(Boolean).length : 0;

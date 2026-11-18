@@ -355,7 +355,11 @@ async function main() {
       const cidade = profile.cidade || "";
       const discoveryPreferences = await fetchDiscoveryPreferences(userId, cidade);
       const limiteDiario = profile.limite_diario || 100;
-      const directSubmissionEnabled = !ASSISTED_REVIEW_ONLY && profile.direct_submission_enabled === true && Boolean(process.env.BOT_USER_ID);
+      const directSubmissionRequested = !ASSISTED_REVIEW_ONLY && profile.direct_submission_enabled === true && Boolean(process.env.BOT_USER_ID);
+      // The legacy browser adapters cannot provide durable confirmation from
+      // the external platforms. Keep the consent flag, but do not execute
+      // blind form submissions until a provider-specific adapter is verified.
+      const directSubmissionEnabled = false;
 
       // Expandir termos de busca baseado no cargo principal
       const termosRelacionados = [...new Set(cargoes.flatMap(expandirTermosBusca))].slice(0, 18);
@@ -364,7 +368,7 @@ async function main() {
       log(`[BOT] User ${userId}: cargo="${cargoBase}", termos=${termosRelacionados.length}, limite=${limiteDiario}`);
       log(`[BOT] Buscando por: ${termosRelacionados.join(", ")}`);
       log(`[BOT] Preferências: país=${discoveryPreferences.countryCode}, cidade=${discoveryPreferences.city || "não definida"}, internacional=${discoveryPreferences.allowInternational || discoveryPreferences.internationalOnly}`);
-      await reportRunEvent(userId, "started", "Automação iniciada.", { mode: directSubmissionEnabled ? "direct_authorized" : "discovery" }, "running");
+      await reportRunEvent(userId, "started", directSubmissionRequested ? "Automação iniciada em revisão assistida; nenhuma candidatura será enviada sem confirmação verificável." : "Automação de descoberta iniciada.", { mode: directSubmissionRequested ? "assisted_review" : "discovery" }, "running");
 
       // Resolve credentials per-profile (from DB or env fallback)
   // Se hasSession, ainda assim passa as credenciais do perfil como fallback
@@ -394,7 +398,7 @@ async function main() {
       }
 
       if (!directSubmissionEnabled) {
-        log("[BOT] Modo assistido: envio final desativado. Nenhuma candidatura será enviada sem revisão humana.");
+        log(directSubmissionRequested ? "[BOT] Envio direto solicitado, mas os adaptadores atuais não têm confirmação verificável. Executando descoberta e revisão assistida." : "[BOT] Modo descoberta: nenhuma candidatura será enviada.");
         try {
           const googleJobs = await scrapeGoogleJobs(browser, {
             cargo: cargoBase,

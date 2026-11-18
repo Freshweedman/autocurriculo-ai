@@ -22,7 +22,10 @@ export async function POST() {
     .maybeSingle();
   if (profileError) return NextResponse.json({ error: "Não foi possível verificar as preferências da automação." }, { status: 500 });
 
-  const mode = profile?.direct_submission_enabled ? "direct_authorized" : "discovery";
+  // Consent is retained for future verified provider adapters. The current
+  // browser adapters do not have confirmation evidence, so a run is always
+  // discovery/review instead of blind submission.
+  const mode = profile?.direct_submission_enabled ? "assisted_review" : "discovery";
   const { data: run, error: runError } = await admin
     .from("automation_runs")
     .insert({ user_id: user.id, trigger_type: "manual", status: "queued", summary: { mode } })
@@ -46,8 +49,8 @@ export async function POST() {
   );
 
   if (resp.status === 204) {
-    const message = mode === "direct_authorized"
-      ? "Execução de candidatura autorizada iniciada. Cada envio só será registrado como confirmado quando a plataforma apresentar evidência."
+    const message = mode === "assisted_review"
+      ? "Revisão assistida iniciada. As vagas serão encontradas e organizadas; nenhuma candidatura será marcada como enviada sem confirmação da plataforma."
       : "Descoberta iniciada. O sistema vai buscar e classificar vagas, sem enviar currículos.";
     return NextResponse.json({ ok: true, runId: run.id, mode, message });
   }

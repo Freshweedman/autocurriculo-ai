@@ -39,6 +39,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
 };
 
 const TRACKING_STATUSES = ["interessado", "salvo", "preparando", "candidatado", "em_analise", "entrevista", "aprovado", "rejeitado", "desistencia"];
+const TECHNICAL_STATUSES = new Set(["falhou", "sem_file_input", "sem_submit", "nao_suportado", "duplicado"]);
 
 const PLAT_COLOR: Record<string, string> = {
   LinkedIn: "#0A66C2", Indeed: "#2164F3", InfoJobs: "#FF6600",
@@ -51,7 +52,7 @@ export default function CandidaturasPage() {
   const [apps, setApps] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("sem_duplicados"); // esconde duplicados por padrão
+  const [filtroStatus, setFiltroStatus] = useState("candidaturas");
   const [filtroPlatforma, setFiltroPlatforma] = useState("todas");
   const [selected, setSelected] = useState<Application | null>(null);
   const [cvUrl, setCvUrl] = useState<string | null>(null);
@@ -130,21 +131,23 @@ export default function CandidaturasPage() {
       ? true
       : filtroStatus === "sem_duplicados"
       ? a.status !== "duplicado"
+      : filtroStatus === "candidaturas"
+      ? !TECHNICAL_STATUSES.has(a.status)
       : a.status === filtroStatus;
     const matchPlat = filtroPlatforma === "todas" || a.plataforma === filtroPlatforma;
     return matchSearch && matchStatus && matchPlat;
   });
 
-  const enviadas = apps.filter(a => a.status === "enviado").length;
+  const enviadas = apps.filter(a => a.status === "confirmed").length;
   const hoje = apps.filter(a => {
     const d = new Date(a.created_at).toDateString();
-    return d === new Date().toDateString() && a.status === "enviado";
+    return d === new Date().toDateString() && a.status === "confirmed";
   }).length;
   // Não conta duplicados no total visível
-  const totalReal = apps.filter(a => a.status !== "duplicado").length;
+  const totalReal = apps.filter(a => !TECHNICAL_STATUSES.has(a.status)).length;
 
   // Stats by platform
-  const statsByPlat = apps.filter(a => a.status === "enviado").reduce((acc, a) => {
+  const statsByPlat = apps.filter(a => a.status === "confirmed").reduce((acc, a) => {
     acc[a.plataforma] = (acc[a.plataforma] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -246,6 +249,7 @@ export default function CandidaturasPage() {
           />
         </div>
         <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} style={{ width: "auto", paddingRight: 32 }}>
+          <option value="candidaturas">Candidaturas e revisão</option>
           <option value="sem_duplicados">Sem duplicados</option>
           <option value="todos">Todos os status</option>
           <option value="enviado">Enviado</option>
