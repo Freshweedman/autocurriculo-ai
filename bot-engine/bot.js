@@ -356,10 +356,9 @@ async function main() {
       const discoveryPreferences = await fetchDiscoveryPreferences(userId, cidade);
       const limiteDiario = profile.limite_diario || 100;
       const directSubmissionRequested = !ASSISTED_REVIEW_ONLY && profile.direct_submission_enabled === true && Boolean(process.env.BOT_USER_ID);
-      // The legacy browser adapters cannot provide durable confirmation from
-      // the external platforms. Keep the consent flag, but do not execute
-      // blind form submissions until a provider-specific adapter is verified.
-      const directSubmissionEnabled = false;
+      // Only individual authenticated connectors may submit. Public generic
+      // pages remain discovery/review until they have a verified adapter.
+      const directSubmissionEnabled = directSubmissionRequested;
 
       // Expandir termos de busca baseado no cargo principal
       const termosRelacionados = [...new Set(cargoes.flatMap(expandirTermosBusca))].slice(0, 18);
@@ -397,8 +396,8 @@ async function main() {
         continue;
       }
 
-      if (!directSubmissionEnabled) {
-        log(directSubmissionRequested ? "[BOT] Envio direto solicitado, mas os adaptadores atuais não têm confirmação verificável. Executando descoberta e revisão assistida." : "[BOT] Modo descoberta: nenhuma candidatura será enviada.");
+      if (!directSubmissionEnabled || userConnections.size === 0) {
+        log(directSubmissionRequested ? "[BOT] Envio direto solicitado, mas não há conexão individual habilitada. Executando descoberta e revisão assistida." : "[BOT] Modo descoberta: nenhuma candidatura será enviada.");
         try {
           const googleJobs = await scrapeGoogleJobs(browser, {
             cargo: cargoBase,
@@ -477,6 +476,16 @@ async function main() {
         }
         log(`[BOT] Sine total: ${allResults.filter(r=>r.plataforma==="Sine").length} resultados`);
       }
+
+      // Do not run legacy blind uploads against public boards. They are not
+      // authenticated connector adapters and historically generated false
+      // attempts from search/listing pages.
+      await reportResults(userId, allResults);
+      const confirmed = allResults.filter((result) => result.confirmationEvidence).length;
+      await reportRunEvent(userId, "completed", `${allResults.length} tentativa(s) em conexões individuais; ${confirmed} confirmação(ões) verificável(is).`, { processed: allResults.length, confirmed }, "succeeded");
+      await authContext.close();
+      fs.unlinkSync(cvPath);
+      continue;
 
       // ── FONTES PÚBLICAS E PÁGINAS DE CARREIRA ──────────────────────────────
 

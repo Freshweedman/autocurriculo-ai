@@ -1,5 +1,6 @@
 const { randomDelay, humanType } = require("../utils/delays");
 const { log } = require("../utils/logger");
+const { waitForSubmissionProof } = require("../utils/submission-proof");
 
 /**
  * Indeed Brasil automation (v3 - fixed selectors, vaga_url tracking, dedup-safe)
@@ -126,15 +127,17 @@ async function applyIndeed(browser, authContext, config) {
               }
 
               if (submitted) {
-                applied++;
+                const confirmationEvidence = await waitForSubmissionProof(page);
+                if (confirmationEvidence) applied++;
                 results.push({
                   empresa: info.empresa || "Indeed",
                   vaga: info.titulo || vagaUrl,
                   vaga_url: vagaUrl,
                   plataforma: "Indeed",
-                  status: "enviado",
+                  status: confirmationEvidence ? "confirmed" : "pending_confirmation",
+                  confirmationEvidence,
                 });
-                log(`[OK] Indeed #${applied}: ${info.empresa}`);
+                log(confirmationEvidence ? `[OK] Indeed confirmado #${applied}: ${info.empresa}` : `[INDEED] Submissão sem confirmação verificável: ${info.empresa}`);
               } else {
                 results.push({
                   empresa: info.empresa || "Indeed",
