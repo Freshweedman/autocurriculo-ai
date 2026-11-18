@@ -1,12 +1,13 @@
 const { randomDelay } = require("../utils/delays");
 const { log } = require("../utils/logger");
+const { completeApplicationForm } = require("../forms/application-form");
 
 /**
  * Generic bot for platforms like InfoJobs, Abler, Kenoby, "Trabalhe Conosco" pages.
  * Strategy: detect file inputs, auto-attach resume. Login if credentials provided.
  */
 async function applyGeneric(browser, config) {
-  const { curriculoPath, plataforma, urls, email, senha } = config;
+  const { curriculoPath, plataforma, urls, email, senha, candidate } = config;
   const results = [];
 
   for (const url of urls) {
@@ -62,41 +63,9 @@ async function applyGeneric(browser, config) {
         }
       }
 
-      // Detect file inputs for resume upload
-      const fileInputs = await page.$$('input[type="file"]');
-      if (fileInputs.length > 0 && curriculoPath) {
-        let uploaded = false;
-        for (const input of fileInputs) {
-          try {
-            await input.setInputFiles(curriculoPath);
-            uploaded = true;
-            log(`[${plataforma}] Curriculo anexado em: ${url}`);
-            await randomDelay(1000, 2000);
-            break;
-          } catch (inputErr) {
-            log(`[${plataforma}] Erro upload: ${inputErr.message}`);
-          }
-        }
-
-        if (uploaded) {
-          const submitBtn = await page.$(
-            'button[type="submit"], input[type="submit"], button:has-text("Enviar"), button:has-text("Candidatar"), button:has-text("Apply"), button:has-text("Confirmar")'
-          );
-          if (submitBtn && await submitBtn.isVisible()) {
-            await submitBtn.click();
-            await randomDelay(2000, 3000);
-            log(`[${plataforma}] Formulario enviado`);
-            results.push({ empresa: plataforma, vaga: url, vaga_url: url, plataforma, status: "enviado" });
-          } else {
-            results.push({ empresa: plataforma, vaga: url, vaga_url: url, plataforma, status: "sem_submit" });
-          }
-        } else {
-          results.push({ empresa: plataforma, vaga: url, vaga_url: url, plataforma, status: "falhou" });
-        }
-      } else {
-        log(`[${plataforma}] Nenhum input[type=file] encontrado em: ${url}`);
-        results.push({ empresa: plataforma, vaga: url, vaga_url: url, plataforma, status: "sem_file_input" });
-      }
+      const form = await completeApplicationForm(page, { candidate: candidate || { name: "", email: email || "", phone: "", experience: "" }, resumePath: curriculoPath });
+      log(`[${plataforma}] Resultado do formulário: ${form.status}`);
+      results.push({ empresa: plataforma, vaga: url, vaga_url: url, plataforma, status: form.status, confirmationEvidence: form.confirmationEvidence });
 
     } catch (err) {
       log(`[ERRO] ${plataforma} ${url}: ${err.message}`);

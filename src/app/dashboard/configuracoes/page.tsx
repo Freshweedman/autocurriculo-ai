@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 // ─── Platform definitions ─────────────────────────────────────────────────────
 
 const PLATFORMS = [
-  { key: "indeed",    nome: "Indeed",         icon: "I", tipo: "emprego",   googleLogin: true,  descricao: "Login concluído no Indeed", manualOnly: true, loginUrl: "https://secure.indeed.com/account/login" },
+  { key: "indeed",    nome: "Indeed",         icon: "I", tipo: "emprego",   googleLogin: true,  descricao: "Use a sua conta Indeed; verificações adicionais continuam no site", loginUrl: "https://secure.indeed.com/account/login" },
   { key: "linkedin",  nome: "LinkedIn",       icon: "in", tipo: "emprego",  googleLogin: true,  descricao: "A candidatura é concluída no LinkedIn", manualOnly: true, loginUrl: "https://www.linkedin.com/login" },
   { key: "infojobs",  nome: "InfoJobs",       icon: "IJ", tipo: "emprego",  googleLogin: false, descricao: "Plataforma brasileira de oportunidades" },
   { key: "catho",     nome: "Catho",          icon: "C", tipo: "emprego",   googleLogin: false, descricao: "Plataforma brasileira de oportunidades" },

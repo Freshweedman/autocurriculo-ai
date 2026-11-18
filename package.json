@@ -10,7 +10,9 @@
     "test:rls": "node tests/rls-two-users.js",
     "test:ranking": "node tests/publicboards-ranking.js",
     "test:job-urls": "node tests/job-url.test.js",
-    "test:submission-proof": "node tests/submission-proof.test.js"
+    "test:submission-proof": "node tests/submission-proof.test.js",
+    "test:controlled-application": "npm --prefix bot-engine run test:controlled-application",
+    "test:controlled-webhook": "node tests/controlled-webhook.production.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

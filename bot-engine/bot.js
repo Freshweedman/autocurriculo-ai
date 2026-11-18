@@ -135,7 +135,7 @@ async function fetchDiscoveryPreferences(userId, fallbackCity) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}` };
   const [professionalResponse, searchResponse] = await Promise.all([
-    fetch(`${SUPABASE_URL}/rest/v1/professional_profiles?user_id=eq.${encodeURIComponent(userId)}&select=country_code,city,state,work_preferences`, { headers }),
+    fetch(`${SUPABASE_URL}/rest/v1/professional_profiles?user_id=eq.${encodeURIComponent(userId)}&select=full_name,phone,summary,country_code,city,state,work_preferences`, { headers }),
     fetch(`${SUPABASE_URL}/rest/v1/search_profiles?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=keywords,locations,work_modes,contract_types,seniorities,remote_only,international_only&limit=1`, { headers }),
   ]);
   const professional = professionalResponse.ok ? (await professionalResponse.json())[0] : null;
@@ -150,6 +150,13 @@ async function fetchDiscoveryPreferences(userId, fallbackCity) {
     allowInternational: workPreferences.allowInternational === true,
     workModes: search?.work_modes || [],
     contractTypes: search?.contract_types || [],
+    candidate: {
+      name: professional?.full_name || "",
+      lastName: professional?.full_name?.trim().split(/\s+/).slice(1).join(" ") || "",
+      email: "",
+      phone: professional?.phone || "",
+      experience: professional?.summary || "",
+    },
   };
 }
 
@@ -169,11 +176,24 @@ async function downloadCurriculo(userId) {
   // Usa service role key para acessar storage privado
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
   const resumeResponse = await fetch(
-    `${SUPABASE_URL}/rest/v1/resumes?user_id=eq.${encodeURIComponent(userId)}&select=storage_path,is_default,created_at&order=is_default.desc,created_at.desc&limit=1`,
+    `${SUPABASE_URL}/rest/v1/resumes?user_id=eq.${encodeURIComponent(userId)}&select=storage_path,mime_type,size_bytes,is_default,created_at&order=is_default.desc,created_at.desc&limit=1`,
     { headers: { apikey: key, Authorization: `Bearer ${key}` } }
   );
   const resumeRows = resumeResponse.ok ? await resumeResponse.json() : [];
-  const storagePath = resumeRows[0]?.storage_path || `${userId}/curriculo.pdf`;
+  const resume = resumeRows[0];
+  if (!resume?.storage_path) {
+    log(`[API] Nenhum currículo padrão registrado para o usuário ${userId}`);
+    return null;
+  }
+  if (resume.mime_type && resume.mime_type !== "application/pdf") {
+    log(`[API] Currículo padrão recusado: tipo ${resume.mime_type} não é PDF`);
+    return null;
+  }
+  if (resume.size_bytes && (resume.size_bytes < 1024 || resume.size_bytes > 10 * 1024 * 1024)) {
+    log("[API] Currículo padrão recusado: tamanho fora do limite de 1 KB a 10 MB");
+    return null;
+  }
+  const storagePath = resume.storage_path;
   const resp = await fetch(
     `${SUPABASE_URL}/storage/v1/object/curriculos/${storagePath}`,
     { headers: { apikey: key, Authorization: `Bearer ${key}` } }
@@ -186,8 +206,12 @@ async function downloadCurriculo(userId) {
 
   const localPath = path.join(__dirname, `curriculo_${userId}.pdf`);
   const buffer = await resp.buffer();
+  if (buffer.length < 1024 || buffer.length > 10 * 1024 * 1024 || !buffer.subarray(0, 5).equals(Buffer.from("%PDF-"))) {
+    log("[API] Currículo baixado foi recusado: o conteúdo não é um PDF válido dentro do limite aceito");
+    return null;
+  }
   fs.writeFileSync(localPath, buffer);
-  log(`[API] Curriculo baixado para ${localPath}`);
+  log(`[API] Currículo PDF validado e preparado para envio (${buffer.length} bytes).`);
   return localPath;
 }
 
@@ -367,7 +391,7 @@ async function main() {
       log(`[BOT] User ${userId}: cargo="${cargoBase}", termos=${termosRelacionados.length}, limite=${limiteDiario}`);
       log(`[BOT] Buscando por: ${termosRelacionados.join(", ")}`);
       log(`[BOT] Preferências: país=${discoveryPreferences.countryCode}, cidade=${discoveryPreferences.city || "não definida"}, internacional=${discoveryPreferences.allowInternational || discoveryPreferences.internationalOnly}`);
-      await reportRunEvent(userId, "started", directSubmissionRequested ? "Automação iniciada em revisão assistida; nenhuma candidatura será enviada sem confirmação verificável." : "Automação de descoberta iniciada.", { mode: directSubmissionRequested ? "assisted_review" : "discovery" }, "running");
+      await reportRunEvent(userId, "started", directSubmissionRequested ? "Automação de envio autorizado iniciada. Cada candidatura exige confirmação verificável da plataforma." : "Automação de descoberta iniciada.", { mode: directSubmissionRequested ? "direct_authorized" : "discovery" }, "running");
 
       // Resolve credentials per-profile (from DB or env fallback)
   // Se hasSession, ainda assim passa as credenciais do perfil como fallback
@@ -432,6 +456,7 @@ async function main() {
           email: profileIndeedCreds.email,
           senha: profileIndeedCreds.senha,
           cargo: cargoBase, cidade, curriculoPath: cvPath, limiteDiario,
+          candidate: { ...discoveryPreferences.candidate, email: profileIndeedCreds.email },
         });
         allResults.push(...r);
         log(`[BOT] Indeed: ${r.length} resultados`);

@@ -1,12 +1,12 @@
 const { randomDelay, humanType } = require("../utils/delays");
 const { log } = require("../utils/logger");
-const { waitForSubmissionProof } = require("../utils/submission-proof");
+const { completeApplicationForm } = require("../forms/application-form");
 
 /**
  * Indeed Brasil automation (v3 - fixed selectors, vaga_url tracking, dedup-safe)
  */
 async function applyIndeed(browser, authContext, config) {
-  const { email, senha, session, cargo, cidade, curriculoPath, limiteDiario } = config;
+  const { email, senha, session, cargo, cidade, curriculoPath, limiteDiario, candidate } = config;
   const results = [];
 
   let context = authContext;
@@ -96,66 +96,17 @@ async function applyIndeed(browser, authContext, config) {
             await easyApplyBtn.click();
             await randomDelay(2000, 4000);
 
-            const fileInput = await page.$('input[type="file"]');
-            if (fileInput) {
-              await fileInput.setInputFiles(curriculoPath);
-              log(`[INDEED] CV #${applied + 1}: ${info.titulo || vagaUrl}`);
-              await randomDelay(1000, 2000);
-
-              // Try to submit through the multi-step form
-              let submitted = false;
-              for (let step = 0; step < 6; step++) {
-                const continueBtn = await page.$(
-                  'button:has-text("Continuar"), button:has-text("Continue"), ' +
-                  'button:has-text("Próxima"), button:has-text("Next")'
-                );
-                const submitBtn = await page.$(
-                  'button:has-text("Enviar candidatura"), button:has-text("Submit application"), ' +
-                  'button:has-text("Enviar"), button:has-text("Concluir"), button:has-text("Finalizar")'
-                );
-
-                if (submitBtn && await submitBtn.isVisible()) {
-                  await submitBtn.click();
-                  submitted = true;
-                  break;
-                } else if (continueBtn && await continueBtn.isVisible()) {
-                  await continueBtn.click();
-                  await randomDelay(1500, 3000);
-                } else {
-                  break;
-                }
-              }
-
-              if (submitted) {
-                const confirmationEvidence = await waitForSubmissionProof(page);
-                if (confirmationEvidence) applied++;
-                results.push({
-                  empresa: info.empresa || "Indeed",
-                  vaga: info.titulo || vagaUrl,
-                  vaga_url: vagaUrl,
-                  plataforma: "Indeed",
-                  status: confirmationEvidence ? "confirmed" : "pending_confirmation",
-                  confirmationEvidence,
-                });
-                log(confirmationEvidence ? `[OK] Indeed confirmado #${applied}: ${info.empresa}` : `[INDEED] Submissão sem confirmação verificável: ${info.empresa}`);
-              } else {
-                results.push({
-                  empresa: info.empresa || "Indeed",
-                  vaga: info.titulo || vagaUrl,
-                  vaga_url: vagaUrl,
-                  plataforma: "Indeed",
-                  status: "nao_suportado",
-                });
-              }
-            } else {
-              results.push({
-                empresa: info.empresa || "Indeed",
-                vaga: info.titulo || vagaUrl,
-                vaga_url: vagaUrl,
-                plataforma: "Indeed",
-                status: "sem_file_input",
-              });
-            }
+            const form = await completeApplicationForm(page, { candidate: candidate || { name: "", email, phone: "", experience: "" }, resumePath: curriculoPath });
+            if (form.status === "confirmed") applied++;
+            results.push({
+              empresa: info.empresa || "Indeed",
+              vaga: info.titulo || vagaUrl,
+              vaga_url: vagaUrl,
+              plataforma: "Indeed",
+              status: form.status,
+              confirmationEvidence: form.confirmationEvidence,
+            });
+            log(form.status === "confirmed" ? `[OK] Indeed confirmado #${applied}: ${info.empresa}` : `[INDEED] Resultado do formulário: ${form.status} (${info.empresa})`);
           } else {
             results.push({
               empresa: info.empresa || "Indeed",
