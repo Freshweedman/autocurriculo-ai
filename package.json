@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test:rls": "node tests/rls-two-users.js"
+    "test:rls": "node tests/rls-two-users.js",
+    "test:ranking": "node tests/publicboards-ranking.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

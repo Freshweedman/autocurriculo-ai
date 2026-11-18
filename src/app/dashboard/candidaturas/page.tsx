@@ -28,6 +28,8 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
   rejeitado:      { label: "Rejeitado",      color: "#fda4af", bg: "rgba(253,164,175,0.1)" },
   desistencia:    { label: "Desistência",    color: "#a8bacb", bg: "rgba(168,186,203,0.1)" },
   enviado:       { label: "Enviado",        color: "#30D158", bg: "rgba(48,209,88,0.1)" },
+  confirmed:     { label: "Confirmado",     color: "#5eead4", bg: "rgba(94,234,212,0.1)" },
+  pending_confirmation: { label: "Pendente de confirmação", color: "#fbbf77", bg: "rgba(251,191,119,0.1)" },
   falhou:        { label: "Falhou",         color: "#FF6961", bg: "rgba(255,69,58,0.1)" },
   pendente:      { label: "Pendente",       color: "#FF9F0A", bg: "rgba(255,159,10,0.1)" },
   duplicado:     { label: "Duplicado",      color: "#FF9F0A", bg: "rgba(255,159,10,0.1)" },
@@ -84,7 +86,7 @@ export default function CandidaturasPage() {
   }, []);
 
   const runBot = async () => {
-    const confirmed = window.confirm("A descoberta assistida consulta fontes configuradas da sua conta. Ela não enviará candidaturas automaticamente. Deseja continuar?");
+    const confirmed = window.confirm("A busca consulta fontes compatíveis com suas preferências. Resultados e etapas aparecerão na Central de automação. Deseja continuar?");
     if (!confirmed) return;
     setBotRunning(true);
     setBotMsg(null);
@@ -93,8 +95,7 @@ export default function CandidaturasPage() {
       const d = await r.json();
       if (r.ok) {
         setBotMsg(d.message || "Bot iniciado. Aguarde alguns minutos para ver resultados.");
-        // Recarrega candidaturas após 5 minutos
-        setTimeout(() => { loadCandidaturas(); setBotMsg("Resultados atualizados."); }, 5 * 60 * 1000);
+        window.setTimeout(() => { void loadCandidaturas(); }, 10_000);
       } else {
         setBotMsg(d.error || "Erro ao iniciar o envio.");
       }
@@ -248,6 +249,8 @@ export default function CandidaturasPage() {
           <option value="sem_duplicados">Sem duplicados</option>
           <option value="todos">Todos os status</option>
           <option value="enviado">Enviado</option>
+          <option value="confirmed">Confirmado</option>
+          <option value="pending_confirmation">Pendente de confirmação</option>
           <option value="duplicado">Duplicado</option>
           <option value="falhou">Falhou</option>
           <option value="nao_suportado">Não suportado</option>

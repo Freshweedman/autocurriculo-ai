@@ -9,6 +9,10 @@ on:
         description: "Authenticated profile to process"
         required: false
         type: string
+      run_id:
+        description: "Persisted automation run"
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -54,6 +58,7 @@ jobs:
           BOT_API_KEY: ${{ secrets.BOT_API_KEY }}
           API_URL: ${{ secrets.API_URL }}
           BOT_USER_ID: ${{ inputs.user_id }}
+          AUTOMATION_RUN_ID: ${{ inputs.run_id }}
         run: node bot.js
 
       - name: Upload logs (always)

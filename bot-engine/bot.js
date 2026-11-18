@@ -51,6 +51,7 @@ const API_URL = (process.env.API_URL || "").replace(/\/$/, "") || "https://autoc
 // Submission is allowed only for a dashboard-triggered run whose owner has
 // explicitly opted in. Scheduled work is always discovery-only.
 const ASSISTED_REVIEW_ONLY = false;
+const automationRunIds = new Map();
 
 function decryptConnectionSecret(value) {
   if (!CONNECTION_ENCRYPTION_KEY) throw new Error("CONNECTION_ENCRYPTION_KEY nao configurada");
@@ -130,6 +131,40 @@ async function fetchConnections(userIds) {
   return byUser;
 }
 
+async function fetchDiscoveryPreferences(userId, fallbackCity) {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
+  const headers = { apikey: key, Authorization: `Bearer ${key}` };
+  const [professionalResponse, searchResponse] = await Promise.all([
+    fetch(`${SUPABASE_URL}/rest/v1/professional_profiles?user_id=eq.${encodeURIComponent(userId)}&select=country_code,city,state,work_preferences`, { headers }),
+    fetch(`${SUPABASE_URL}/rest/v1/search_profiles?user_id=eq.${encodeURIComponent(userId)}&active=eq.true&select=keywords,locations,work_modes,contract_types,seniorities,remote_only,international_only&limit=1`, { headers }),
+  ]);
+  const professional = professionalResponse.ok ? (await professionalResponse.json())[0] : null;
+  const search = searchResponse.ok ? (await searchResponse.json())[0] : null;
+  const workPreferences = professional?.work_preferences || {};
+  return {
+    countryCode: professional?.country_code || "BR",
+    city: professional?.city || fallbackCity || "",
+    state: professional?.state || "",
+    remoteOnly: search?.remote_only === true,
+    internationalOnly: search?.international_only === true,
+    allowInternational: workPreferences.allowInternational === true,
+    workModes: search?.work_modes || [],
+    contractTypes: search?.contract_types || [],
+  };
+}
+
+async function reportRunEvent(userId, eventType, message, metadata = {}, runStatus) {
+  try {
+    const response = await fetch(`${API_URL}/api/webhook/automation-runs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: BOT_API_KEY, runId: automationRunIds.get(userId) || process.env.AUTOMATION_RUN_ID || null, userId, eventType, message, metadata, runStatus }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (payload?.runId) automationRunIds.set(userId, payload.runId);
+  } catch (error) { log(`[API] Não foi possível registrar evento da execução: ${error.message}`); }
+}
+
 async function downloadCurriculo(userId) {
   // Usa service role key para acessar storage privado
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY || SUPABASE_ANON_KEY;
@@ -158,13 +193,20 @@ async function downloadCurriculo(userId) {
 
 async function reportResults(userId, applications) {
   if (applications.length === 0) return;
+  // Legacy adapters cannot consistently prove that a remote platform accepted
+  // an application. Preserve the attempt, but never report it as sent unless
+  // a future adapter returns an explicit, auditable confirmation.
+  const safeApplications = applications.map((application) => ({
+    ...application,
+    status: application.confirmationEvidence ? "confirmed" : application.status === "enviado" ? "pending_confirmation" : application.status,
+  }));
   try {
     const resp = await fetch(`${API_URL}/api/webhook/bot`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         apiKey: BOT_API_KEY,
-        applications: applications.map((app) => ({ ...app, user_id: userId })),
+        applications: safeApplications.map((app) => ({ ...app, user_id: userId })),
       }),
     });
     
@@ -184,7 +226,7 @@ async function reportOpportunities(userId, opportunities) {
     const response = await fetch(`${API_URL}/api/webhook/opportunities`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey: BOT_API_KEY, userId, opportunities }),
+      body: JSON.stringify({ apiKey: BOT_API_KEY, userId, runId: automationRunIds.get(userId) || process.env.AUTOMATION_RUN_ID || null, opportunities }),
     });
     if (response.ok) log(`[API] ${opportunities.length} oportunidade(s) registradas para revisão.`);
     else log(`[API] Erro ao registrar oportunidades: ${response.status}`);
@@ -311,6 +353,7 @@ async function main() {
       const cargoes = String(profile.cargo || "gestor de trafego").split(/[,;\n]/).map((cargo) => cargo.trim()).filter(Boolean);
       const cargoBase = cargoes[0] || "gestor de trafego";
       const cidade = profile.cidade || "";
+      const discoveryPreferences = await fetchDiscoveryPreferences(userId, cidade);
       const limiteDiario = profile.limite_diario || 100;
       const directSubmissionEnabled = !ASSISTED_REVIEW_ONLY && profile.direct_submission_enabled === true && Boolean(process.env.BOT_USER_ID);
 
@@ -320,6 +363,8 @@ async function main() {
 
       log(`[BOT] User ${userId}: cargo="${cargoBase}", termos=${termosRelacionados.length}, limite=${limiteDiario}`);
       log(`[BOT] Buscando por: ${termosRelacionados.join(", ")}`);
+      log(`[BOT] Preferências: país=${discoveryPreferences.countryCode}, cidade=${discoveryPreferences.city || "não definida"}, internacional=${discoveryPreferences.allowInternational || discoveryPreferences.internationalOnly}`);
+      await reportRunEvent(userId, "started", "Automação iniciada.", { mode: directSubmissionEnabled ? "direct_authorized" : "discovery" }, "running");
 
       // Resolve credentials per-profile (from DB or env fallback)
   // Se hasSession, ainda assim passa as credenciais do perfil como fallback
@@ -356,12 +401,15 @@ async function main() {
             cidade,
             limiteDiario: Math.min(limiteDiario, 30),
           });
-          const publicBoards = await discoverPublicBoards({ cargo: termosRelacionados.join(", "), limiteDiario: Math.min(limiteDiario, 30) });
+          await reportRunEvent(userId, "source_started", "Consultando fontes públicas de vagas.", { sources: ["Google Jobs", "Remotive", "Arbeitnow", "Remote OK"] });
+          const publicBoards = await discoverPublicBoards({ cargo: termosRelacionados.join(", "), limiteDiario: Math.min(limiteDiario, 30), preferences: { ...discoveryPreferences, cargo: termosRelacionados.join(", ") } });
           const discovered = [...new Map([...googleJobs, ...publicBoards].map((job) => [job.vaga_url, job])).values()];
           log(`[BOT] Descoberta assistida: ${discovered.length} oportunidade(s) encontradas para revisão.`);
           await reportOpportunities(userId, discovered);
+          await reportRunEvent(userId, "completed", `${discovered.length} oportunidade(s) compatível(is) registradas para revisão.`, { discovered: discovered.length }, "succeeded");
         } catch (error) {
           log(`[BOT] Descoberta assistida falhou: ${error.message}`);
+          await reportRunEvent(userId, "failed", "A descoberta falhou antes de concluir.", { error: error.message }, "failed");
         } finally {
           await authContext.close();
           fs.unlinkSync(cvPath);
@@ -525,11 +573,12 @@ async function main() {
       // Report all results
       await reportResults(userId, allResults);
 
-      const enviados = allResults.filter((r) => r.status === "enviado").length;
+      const enviados = allResults.filter((r) => r.confirmationEvidence).length;
       const porPlat = allResults.reduce((acc, r) => { acc[r.plataforma] = (acc[r.plataforma]||0)+1; return acc; }, {});
       log(`[BOT] User ${userId}: ${enviados} enviadas / ${allResults.length} processadas, ${leads.length} leads`);
       log(`[BOT] Por plataforma: ${Object.entries(porPlat).map(([k,v])=>`${k}:${v}`).join(", ")}`);
       log(`[BOT] API_URL usado: ${API_URL}`);
+      await reportRunEvent(userId, "completed", `${allResults.length} item(ns) processado(s).`, { processed: allResults.length, submitted: enviados }, "succeeded");
     }
 
   } catch (err) {

@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   if (apiKey !== process.env.BOT_API_KEY) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (!Array.isArray(applications)) return NextResponse.json({ error: "Candidaturas inválidas" }, { status: 400 });
 
   const supabase = createAdminClient();
   const results: { id: string; empresa: string; status: string }[] = [];
@@ -48,6 +49,8 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
+      const verified = app.status === "confirmed" && app.confirmationEvidence;
+      const status = verified ? "confirmed" : app.status === "enviado" || app.status === "confirmed" ? "pending_confirmation" : app.status;
       const { data: inserted, error } = await supabase
         .from("applications")
         .insert({
@@ -56,7 +59,7 @@ export async function POST(req: NextRequest) {
           vaga: app.vaga,
           vaga_url: app.vaga_url || null,
           plataforma: app.plataforma,
-          status: app.status,
+          status,
         })
         .select()
         .single();
@@ -67,15 +70,24 @@ export async function POST(req: NextRequest) {
         results.push({
           id: inserted?.id || "",
           empresa: app.empresa,
-          status: app.status,
+          status,
         });
+        if (verified && inserted?.id) {
+          await supabase.from("application_evidence").insert({
+            application_id: inserted.id,
+            user_id: app.user_id,
+            evidence_type: app.confirmationEvidence.type || "platform_confirmation",
+            reference: app.confirmationEvidence.reference || null,
+            details: app.confirmationEvidence.details || {},
+          });
+        }
       }
     } catch {
       results.push({ id: "", empresa: app.empresa || "unknown", status: "falhou" });
     }
   }
 
-  const enviados = results.filter((r) => r.status === "enviado").length;
+  const enviados = results.filter((r) => r.status === "confirmed").length;
   const duplicados = results.filter((r) => r.status === "duplicado").length;
 
   return NextResponse.json({ ok: true, results, summary: { enviados, duplicados, total: results.length } });

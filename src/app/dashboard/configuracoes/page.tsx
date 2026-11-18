@@ -84,6 +84,10 @@ export default function ConfiguracoesPage() {
   const [limiteDiario, setLimiteDiario] = useState(5);
   const [botAtivo, setBotAtivo]         = useState(false);
   const [directSubmission, setDirectSubmission] = useState(false);
+  const [countryCode, setCountryCode] = useState("BR");
+  const [stateCode, setStateCode] = useState("");
+  const [remoteOnly, setRemoteOnly] = useState(false);
+  const [internationalOnly, setInternationalOnly] = useState(false);
   const [loading, setLoading]           = useState(false);
   const [cvUploaded, setCvUploaded]     = useState(false);
   const [resumes, setResumes]           = useState<Array<{ id: string; name: string; is_default: boolean }>>([]);
@@ -104,6 +108,10 @@ export default function ConfiguracoesPage() {
     setLimiteDiario(data.limite_diario || 5);
     setBotAtivo(data.bot_ativo ?? false);
     setDirectSubmission(data.direct_submission_enabled ?? false);
+    setCountryCode(data.discovery_preferences?.country_code || "BR");
+    setStateCode(data.discovery_preferences?.state || "");
+    setRemoteOnly(data.discovery_preferences?.remote_only ?? false);
+    setInternationalOnly(data.discovery_preferences?.international_only ?? false);
 
     const updated = initialPlataformas();
     for (const p of PLATFORMS) {
@@ -129,7 +137,7 @@ export default function ConfiguracoesPage() {
     await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cargo, cidade, limite_diario: limiteDiario, bot_ativo: botAtivo, direct_submission_enabled: directSubmission }),
+      body: JSON.stringify({ cargo, cidade, limite_diario: limiteDiario, bot_ativo: botAtivo, direct_submission_enabled: directSubmission, discovery_preferences: { country_code: countryCode, city: cidade, state: stateCode, remote_only: remoteOnly, international_only: internationalOnly } }),
     });
     setSalvo(true);
     setLoading(false);
@@ -219,6 +227,20 @@ export default function ConfiguracoesPage() {
           <label style={labelStyle}>Cidade / Regiao</label>
           <input value={cidade} onChange={(e) => setCidade(e.target.value)}
             placeholder="Ex: Sao Paulo - SP (deixe vazio para remoto)" style={{ marginBottom: 16 }} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 120px", gap: 10, marginBottom: 16 }}>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>País
+              <select value={countryCode} onChange={(event) => setCountryCode(event.target.value)} style={{ marginTop: 6 }}><option value="BR">Brasil</option><option value="PT">Portugal</option><option value="US">Estados Unidos</option><option value="CA">Canadá</option></select>
+            </label>
+            <label style={{ ...labelStyle, marginBottom: 0 }}>Estado
+              <input value={stateCode} onChange={(event) => setStateCode(event.target.value.toUpperCase())} maxLength={32} placeholder="SP" style={{ marginTop: 6 }} />
+            </label>
+          </div>
+
+          <div style={{ display: "grid", gap: 12, marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><div><div style={{ fontWeight: 500, fontSize: 14 }}>Somente remoto</div><div className="text-muted" style={{ fontSize: 12 }}>Descarta vagas presenciais e híbridas.</div></div><Toggle value={remoteOnly} onChange={setRemoteOnly} /></div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><div><div style={{ fontWeight: 500, fontSize: 14 }}>Aceitar vagas internacionais</div><div className="text-muted" style={{ fontSize: 12 }}>Desativado por padrão. Vagas globais só aparecem quando forem elegíveis.</div></div><Toggle value={internationalOnly} onChange={setInternationalOnly} /></div>
+          </div>
 
           <label style={labelStyle}>Limite diario de envios por plataforma</label>
           <select value={limiteDiario} onChange={(e) => setLimiteDiario(Number(e.target.value))}

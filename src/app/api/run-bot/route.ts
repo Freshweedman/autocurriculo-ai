@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST() {
   const supabase = await createClient();
@@ -13,6 +14,23 @@ export async function POST() {
     return NextResponse.json({ error: "GITHUB_TOKEN nao configurado" }, { status: 500 });
   }
 
+  const admin = createAdminClient();
+  const { data: profile, error: profileError } = await admin
+    .from("profiles")
+    .select("direct_submission_enabled")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (profileError) return NextResponse.json({ error: "Não foi possível verificar as preferências da automação." }, { status: 500 });
+
+  const mode = profile?.direct_submission_enabled ? "direct_authorized" : "discovery";
+  const { data: run, error: runError } = await admin
+    .from("automation_runs")
+    .insert({ user_id: user.id, trigger_type: "manual", status: "queued", summary: { mode } })
+    .select("id")
+    .single();
+  if (runError || !run) return NextResponse.json({ error: "Não foi possível registrar a execução. Verifique se a migration 011 foi aplicada." }, { status: 500 });
+  await admin.from("automation_run_events").insert({ run_id: run.id, user_id: user.id, event_type: "queued", message: "Execução solicitada pela pessoa usuária.", metadata: { mode } });
+
   const resp = await fetch(
     `https://api.github.com/repos/${repo}/actions/workflows/bot.yml/dispatches`,
     {
@@ -23,13 +41,19 @@ export async function POST() {
         "X-GitHub-Api-Version": "2022-11-28",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ref: "main", inputs: { user_id: user.id } }),
+      body: JSON.stringify({ ref: "main", inputs: { user_id: user.id, run_id: run.id } }),
     }
   );
 
   if (resp.status === 204) {
-    return NextResponse.json({ ok: true, message: "Descoberta assistida iniciada. Nenhuma candidatura será enviada automaticamente." });
+    const message = mode === "direct_authorized"
+      ? "Execução de candidatura autorizada iniciada. Cada envio só será registrado como confirmado quando a plataforma apresentar evidência."
+      : "Descoberta iniciada. O sistema vai buscar e classificar vagas, sem enviar currículos.";
+    return NextResponse.json({ ok: true, runId: run.id, mode, message });
   }
+
+  await admin.from("automation_runs").update({ status: "failed", finished_at: new Date().toISOString(), error_message: `GitHub Actions: ${resp.status}` }).eq("id", run.id);
+  await admin.from("automation_run_events").insert({ run_id: run.id, user_id: user.id, event_type: "failed", message: "Não foi possível iniciar a automação no GitHub Actions.", metadata: { status: resp.status } });
 
   const body = await resp.text();
   if (resp.status === 422 && body.includes("disabled workflow")) {

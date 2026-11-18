@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { BriefcaseBusiness, ChevronDown, CircleHelp, FileText, LayoutDashboard, LogOut, Menu, Search, Settings2, ShieldCheck, X } from "lucide-react";
+import { BriefcaseBusiness, ChevronDown, CircleHelp, FileText, LayoutDashboard, LogOut, Menu, Search, Settings2, ShieldCheck, X, Activity } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 
 const groups = [
   { label: "Principal", items: [{ href: "/dashboard", label: "Visão geral", icon: LayoutDashboard }] },
-  { label: "Minha busca", items: [{ href: "/dashboard/oportunidades", label: "Oportunidades", icon: Search }, { href: "/dashboard/candidaturas", label: "Candidaturas", icon: BriefcaseBusiness }] },
+  { label: "Minha busca", items: [{ href: "/dashboard/oportunidades", label: "Oportunidades", icon: Search }, { href: "/dashboard/candidaturas", label: "Candidaturas", icon: BriefcaseBusiness }, { href: "/dashboard/automacao", label: "Central de automação", icon: Activity }] },
   { label: "Conta", items: [{ href: "/dashboard/curriculos", label: "Currículos", icon: FileText }, { href: "/dashboard/configuracoes", label: "Configurações", icon: Settings2 }, { href: "/dashboard/guia", label: "Como usar", icon: CircleHelp }] },
 ];
 
