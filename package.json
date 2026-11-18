@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test:rls": "node tests/rls-two-users.js",
-    "test:ranking": "node tests/publicboards-ranking.js"
+    "test:ranking": "node tests/publicboards-ranking.js",
+    "test:job-urls": "node tests/job-url.test.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.3",

@@ -11,6 +11,10 @@
 
 ## Em andamento
 
+- [x] Seis referências clonadas fora da árvore do produto e licenciadas auditadas.
+- [x] Validação conservadora de URLs públicas individuais, com bloqueio de páginas de busca/listagem.
+- [ ] Adaptadores brasileiros com fontes autorizadas e URLs individuais verificadas.
+- [ ] Reconciliação dos registros técnicos legados em área de auditoria.
 - [x] Migration aditiva 011 para observabilidade de automação, itens da execução e evidências de candidatura.
 - [x] Filtros Brasil/localidade e ranking determinístico para fontes públicas.
 - [x] Associação privada das oportunidades descobertas ao usuário.

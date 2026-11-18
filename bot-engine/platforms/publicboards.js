@@ -1,5 +1,6 @@
 const fetch = require("node-fetch");
 const { log } = require("../utils/logger");
+const { canonicalJobUrl } = require("../utils/job-url");
 
 const TIMEOUT_MS = 12_000;
 const STOP_WORDS = new Set(["de", "da", "do", "das", "dos", "e", "em", "para", "com", "por", "uma", "um"]);
@@ -74,10 +75,11 @@ async function discoverPublicBoards({ cargo, limiteDiario = 30, preferences = {}
   for (const source of sources) {
     if (source.status === "rejected") { log(`[PUBLIC BOARDS] Fonte indisponível: ${source.reason.message}`); continue; }
     for (const job of source.value) {
-      if (!job.vaga || !job.vaga_url) continue;
+      const canonicalUrl = canonicalJobUrl(job.vaga_url);
+      if (!job.vaga || !canonicalUrl) continue;
       const match = scoreJob(job, mergedPreferences);
       if (!match.accepted) continue;
-      unique.set(job.vaga_url, { empresa: job.empresa || job.plataforma, vaga: job.vaga, vaga_url: job.vaga_url, local: job.local, plataforma: job.plataforma, status: "coletado", compatibility_score: match.score, match_reasons: match.reasons });
+      unique.set(canonicalUrl, { empresa: job.empresa || job.plataforma, vaga: job.vaga, vaga_url: canonicalUrl, local: job.local, plataforma: job.plataforma, status: "coletado", compatibility_score: match.score, match_reasons: match.reasons });
     }
   }
   const results = [...unique.values()].sort((a, b) => b.compatibility_score - a.compatibility_score).slice(0, limiteDiario);

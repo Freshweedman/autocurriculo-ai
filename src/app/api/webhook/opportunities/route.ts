@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { canonicalJobUrl } from "@/lib/job-url";
 
 type DiscoveredOpportunity = { empresa?: string; vaga?: string; vaga_url?: string; local?: string; plataforma?: string; compatibility_score?: number; match_reasons?: string[] };
 
@@ -11,11 +12,12 @@ export async function POST(request: NextRequest) {
 
   const now = new Date().toISOString();
   const rows = payload.opportunities.flatMap((item) => {
-    if (!item.vaga_url || !item.vaga) return [];
+    const canonicalUrl = canonicalJobUrl(item.vaga_url);
+    if (!canonicalUrl || !item.vaga) return [];
     return [{
       source: item.plataforma || "public_source",
-      source_job_id: item.vaga_url,
-      canonical_url: item.vaga_url,
+      source_job_id: canonicalUrl,
+      canonical_url: canonicalUrl,
       title: item.vaga,
       company: item.empresa || null,
       location_text: item.local || null,
