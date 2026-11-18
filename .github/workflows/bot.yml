@@ -48,6 +48,20 @@ jobs:
       - name: Prepare bot log
         run: "mkdir -p /tmp && : > /tmp/bot-log.txt"
 
+      - name: Mark manual execution as running
+        if: ${{ inputs.run_id != '' && inputs.user_id != '' }}
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          BOT_API_KEY: ${{ secrets.BOT_API_KEY }}
+          AUTOMATION_RUN_ID: ${{ inputs.run_id }}
+          BOT_USER_ID: ${{ inputs.user_id }}
+        run: |
+          BASE_URL="${API_URL:-https://autocurriculo-ai.vercel.app}"
+          curl --fail-with-body --retry 3 --retry-delay 2 \
+            -X POST "$BASE_URL/api/webhook/automation-runs" \
+            -H "Content-Type: application/json" \
+            --data "{\"apiKey\":\"$BOT_API_KEY\",\"runId\":\"$AUTOMATION_RUN_ID\",\"userId\":\"$BOT_USER_ID\",\"eventType\":\"started\",\"message\":\"Runner iniciado no GitHub Actions.\",\"metadata\":{\"source\":\"github_actions\"},\"runStatus\":\"running\"}"
+
       - name: Run bot
         working-directory: bot-engine
         env:
