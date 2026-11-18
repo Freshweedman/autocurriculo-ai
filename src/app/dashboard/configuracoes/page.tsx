@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 // ─── Platform definitions ─────────────────────────────────────────────────────
 
 const PLATFORMS = [
-  { key: "indeed",    nome: "Indeed",         icon: "I", tipo: "emprego",   googleLogin: true,  descricao: "Use a sua conta Indeed; verificações adicionais continuam no site", loginUrl: "https://secure.indeed.com/account/login" },
+  { key: "indeed",    nome: "Indeed",         icon: "I", tipo: "emprego",   googleLogin: false, descricao: "Login por e-mail e senha da sua própria conta", loginUrl: "https://secure.indeed.com/account/login" },
   { key: "linkedin",  nome: "LinkedIn",       icon: "in", tipo: "emprego",  googleLogin: true,  descricao: "A candidatura é concluída no LinkedIn", manualOnly: true, loginUrl: "https://www.linkedin.com/login" },
   { key: "infojobs",  nome: "InfoJobs",       icon: "IJ", tipo: "emprego",  googleLogin: false, descricao: "Plataforma brasileira de oportunidades" },
   { key: "catho",     nome: "Catho",          icon: "C", tipo: "emprego",   googleLogin: false, descricao: "Plataforma brasileira de oportunidades" },
@@ -88,6 +88,9 @@ export default function ConfiguracoesPage() {
   const [stateCode, setStateCode] = useState("");
   const [remoteOnly, setRemoteOnly] = useState(false);
   const [internationalOnly, setInternationalOnly] = useState(false);
+  const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [professionalSummary, setProfessionalSummary] = useState("");
   const [loading, setLoading]           = useState(false);
   const [cvUploaded, setCvUploaded]     = useState(false);
   const [resumes, setResumes]           = useState<Array<{ id: string; name: string; is_default: boolean }>>([]);
@@ -112,6 +115,9 @@ export default function ConfiguracoesPage() {
     setStateCode(data.discovery_preferences?.state || "");
     setRemoteOnly(data.discovery_preferences?.remote_only ?? false);
     setInternationalOnly(data.discovery_preferences?.international_only ?? false);
+    setFullName(data.applicant?.full_name || "");
+    setPhone(data.applicant?.phone || "");
+    setProfessionalSummary(data.applicant?.summary || "");
 
     const updated = initialPlataformas();
     for (const p of PLATFORMS) {
@@ -137,7 +143,7 @@ export default function ConfiguracoesPage() {
     await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cargo, cidade, limite_diario: limiteDiario, bot_ativo: botAtivo, direct_submission_enabled: directSubmission, discovery_preferences: { country_code: countryCode, city: cidade, state: stateCode, remote_only: remoteOnly, international_only: internationalOnly } }),
+      body: JSON.stringify({ cargo, cidade, limite_diario: limiteDiario, bot_ativo: botAtivo, direct_submission_enabled: directSubmission, applicant: { full_name: fullName, phone, summary: professionalSummary }, discovery_preferences: { country_code: countryCode, city: cidade, state: stateCode, remote_only: remoteOnly, international_only: internationalOnly } }),
     });
     setSalvo(true);
     setLoading(false);
@@ -212,6 +218,13 @@ export default function ConfiguracoesPage() {
         {/* ── Busca ── */}
         <div className="card">
           <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Configuracao de Busca</h3>
+
+          <label style={labelStyle}>Nome para candidaturas</label>
+          <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Seu nome completo" style={{ marginBottom: 12 }} />
+          <label style={labelStyle}>Telefone</label>
+          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Ex.: +55 11 99999-9999" style={{ marginBottom: 12 }} />
+          <label style={labelStyle}>Resumo profissional</label>
+          <textarea value={professionalSummary} onChange={(event) => setProfessionalSummary(event.target.value)} placeholder="Informações que podem preencher o campo de experiência quando forem verdadeiras." style={{ marginBottom: 16, minHeight: 90 }} />
 
           <label style={labelStyle}>Cargos que você procura</label>
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>

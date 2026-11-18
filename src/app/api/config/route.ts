@@ -24,7 +24,7 @@ export async function GET() {
   const [{ data: profileRaw, error }, { data: connections, error: connectionError }, { data: professional }, { data: searchProfile }] = await Promise.all([
     supabase.from("profiles").select(selectCols).eq("user_id", user.id).single(),
     supabase.from("platform_connection_status").select("platform, status, account_hint"),
-    supabase.from("professional_profiles").select("country_code,city,state").eq("user_id", user.id).maybeSingle(),
+    supabase.from("professional_profiles").select("full_name,phone,summary,country_code,city,state").eq("user_id", user.id).maybeSingle(),
     supabase.from("search_profiles").select("id,remote_only,international_only,work_modes,contract_types").eq("user_id", user.id).eq("active", true).limit(1).maybeSingle(),
   ]);
 
@@ -49,6 +49,7 @@ export async function GET() {
     limite_diario: profile?.limite_diario || 5,
     bot_ativo: profile?.bot_ativo || false,
     direct_submission_enabled: profile?.direct_submission_enabled || false,
+    applicant: { full_name: professional?.full_name || "", phone: professional?.phone || "", summary: professional?.summary || "" },
     discovery_preferences: { country_code: professional?.country_code || "BR", city: professional?.city || profile?.cidade || "", state: professional?.state || "", remote_only: searchProfile?.remote_only || false, international_only: searchProfile?.international_only || false, work_modes: searchProfile?.work_modes || [], contract_types: searchProfile?.contract_types || [] },
     plataformas,
   });
@@ -91,12 +92,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if (body.discovery_preferences) {
+  if (body.discovery_preferences || body.applicant) {
     const preferences = body.discovery_preferences as { country_code?: string; city?: string; state?: string; remote_only?: boolean; international_only?: boolean };
-    const { error: professionalError } = await supabase.from("professional_profiles").upsert({ user_id: user.id, country_code: preferences.country_code || "BR", city: preferences.city || null, state: preferences.state || null, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+    const applicant = (body.applicant || {}) as { full_name?: string; phone?: string; summary?: string };
+    const { error: professionalError } = await supabase.from("professional_profiles").upsert({ user_id: user.id, full_name: applicant.full_name?.trim() || null, phone: applicant.phone?.trim() || null, summary: applicant.summary?.trim() || null, country_code: preferences?.country_code || "BR", city: preferences?.city || null, state: preferences?.state || null, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
     if (professionalError) return NextResponse.json({ error: professionalError.message }, { status: 500 });
     const { data: existing } = await supabase.from("search_profiles").select("id").eq("user_id", user.id).eq("active", true).limit(1).maybeSingle();
-    const searchPayload = { user_id: user.id, name: "Busca principal", keywords: String(body.cargo || "").split(/[,;\n]/).map((item: string) => item.trim()).filter(Boolean), remote_only: preferences.remote_only === true, international_only: preferences.international_only === true, active: true, updated_at: new Date().toISOString() };
+    const searchPayload = { user_id: user.id, name: "Busca principal", keywords: String(body.cargo || "").split(/[,;\n]/).map((item: string) => item.trim()).filter(Boolean), remote_only: preferences?.remote_only === true, international_only: preferences?.international_only === true, active: true, updated_at: new Date().toISOString() };
     const { error: searchError } = existing?.id
       ? await supabase.from("search_profiles").update(searchPayload).eq("id", existing.id)
       : await supabase.from("search_profiles").insert(searchPayload);
