@@ -96,15 +96,18 @@ export default function ConfiguracoesPage() {
   const [resumes, setResumes]           = useState<Array<{ id: string; name: string; is_default: boolean }>>([]);
   const [salvo, setSalvo]               = useState(false);
   const [connectionError, setConnectionError] = useState("");
+  const [configMessage, setConfigMessage] = useState("");
   const [pageLoading, setPageLoading]   = useState(true);
   const [plataformas, setPlataformas]   = useState<PlataformasState>(initialPlataformas());
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
   async function loadConfig() {
-    const res = await fetch("/api/config");
-    if (!res.ok) return;
-    const data = await res.json();
+    setPageLoading(true);
+    try {
+      const res = await fetch("/api/config");
+      if (!res.ok) { setConnectionError("Não foi possível carregar suas configurações. Tente novamente em instantes."); return; }
+      const data = await res.json();
 
     setCargo(Array.isArray(data.cargos) ? data.cargos.join(", ") : data.cargo || "");
     setCidade(data.cidade || "");
@@ -119,16 +122,30 @@ export default function ConfiguracoesPage() {
     setPhone(data.applicant?.phone || "");
     setProfessionalSummary(data.applicant?.summary || "");
 
-    const updated = initialPlataformas();
-    for (const p of PLATFORMS) {
-      const pd = data.plataformas?.[p.key];
-      if (pd) updated[p.key] = { ...emptyPlatform(), email: pd.email || "", configurado: pd.configurado || false };
-    }
-    setPlataformas(updated);
-    const { data: resumeRows } = await supabase.from("resumes").select("id,name,is_default").order("created_at", { ascending: false });
-    setResumes(resumeRows || []);
-    setCvUploaded(Boolean(resumeRows?.length));
-    setPageLoading(false);
+      const updated = initialPlataformas();
+      for (const p of PLATFORMS) {
+        const pd = data.plataformas?.[p.key];
+        if (pd) updated[p.key] = { ...emptyPlatform(), email: pd.email || "", configurado: pd.configurado || false };
+      }
+      setPlataformas(updated);
+      const { data: resumeRows, error: resumeError } = await supabase.from("resumes").select("id,name,is_default").order("created_at", { ascending: false });
+      if (resumeError) { setConnectionError("Não foi possível carregar seus currículos. Tente novamente em instantes."); return; }
+      setResumes(resumeRows || []);
+      setCvUploaded(Boolean(resumeRows?.length));
+      const shouldExtract = Boolean(resumeRows?.some((item) => item.is_default)) && (!data.applicant?.full_name || !data.applicant?.phone || !data.applicant?.summary);
+      if (shouldExtract) {
+        const extractResponse = await fetch("/api/resumes/extract", { method: "POST" });
+        const extracted = await extractResponse.json().catch(() => ({}));
+        if (extractResponse.ok) {
+          setFullName(extracted.applicant?.full_name || "");
+          setPhone(extracted.applicant?.phone || "");
+          setProfessionalSummary(extracted.applicant?.summary || "");
+          setConfigMessage("Dados encontrados no currículo e salvos para os formulários.");
+        } else setConfigMessage(extracted.error || "Não foi possível ler o currículo automaticamente.");
+      }
+    } catch {
+      setConnectionError("Não foi possível atualizar esta página. Verifique sua conexão e tente novamente.");
+    } finally { setPageLoading(false); }
   }
 
   useEffect(() => {
@@ -140,11 +157,12 @@ export default function ConfiguracoesPage() {
 
   const handleSave = async () => {
     setLoading(true);
-    await fetch("/api/config", {
+    const response = await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ cargo, cidade, limite_diario: limiteDiario, bot_ativo: botAtivo, direct_submission_enabled: directSubmission, applicant: { full_name: fullName, phone, summary: professionalSummary }, discovery_preferences: { country_code: countryCode, city: cidade, state: stateCode, remote_only: remoteOnly, international_only: internationalOnly } }),
     });
+    if (!response.ok) { setConnectionError("Não foi possível salvar as preferências."); setLoading(false); return; }
     setSalvo(true);
     setLoading(false);
     setTimeout(() => setSalvo(false), 3000);
@@ -208,6 +226,7 @@ export default function ConfiguracoesPage() {
 
       <div style={{ display: "grid", gap: 24, maxWidth: 680 }}>
         {connectionError && <div className="toast toast-error" style={{ position: "static", maxWidth: "none" }}>{connectionError}</div>}
+        {configMessage && <div className="notice" role="status">{configMessage}</div>}
 
         {/* ── Curriculo ── */}
         <div className="resume-selector">
@@ -219,12 +238,16 @@ export default function ConfiguracoesPage() {
         <div className="card">
           <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>Configuracao de Busca</h3>
 
-          <label style={labelStyle}>Nome para candidaturas</label>
-          <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Seu nome completo" style={{ marginBottom: 12 }} />
-          <label style={labelStyle}>Telefone</label>
-          <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Ex.: +55 11 99999-9999" style={{ marginBottom: 12 }} />
-          <label style={labelStyle}>Resumo profissional</label>
-          <textarea value={professionalSummary} onChange={(event) => setProfessionalSummary(event.target.value)} placeholder="Informações que podem preencher o campo de experiência quando forem verdadeiras." style={{ marginBottom: 16, minHeight: 90 }} />
+          <details style={{ marginBottom: 18 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 14 }}>Dados lidos do currículo</summary>
+            <p className="text-muted" style={{ fontSize: 12, margin: "8px 0 14px" }}>Revise apenas se quiser corrigir algo. O sistema não inventa informações ausentes.</p>
+            <label style={labelStyle}>Nome para candidaturas</label>
+            <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="Seu nome completo" style={{ marginBottom: 12 }} />
+            <label style={labelStyle}>Telefone</label>
+            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Ex.: +55 11 99999-9999" style={{ marginBottom: 12 }} />
+            <label style={labelStyle}>Resumo profissional</label>
+            <textarea value={professionalSummary} onChange={(event) => setProfessionalSummary(event.target.value)} placeholder="Informações verdadeiras do seu currículo." style={{ marginBottom: 4, minHeight: 90 }} />
+          </details>
 
           <label style={labelStyle}>Cargos que você procura</label>
           <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
