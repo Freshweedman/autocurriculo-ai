@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+bot-engine/session-state.json
+bot-engine/session-state.b64
+bot-engine/curriculo_*.pdf

@@ -257,6 +257,14 @@ async function probe(context, loginOnly) {
     await new Promise((resolve) => context.once("close", resolve));
     return;
   }
+  if (args[0] === "testar-vaga") {
+    const url = canonicalJobUrl(args[1]);
+    if (!url || new URL(url).origin !== "https://br.indeed.com" || new URL(url).pathname !== "/viewjob") throw Error("Informe uma URL individual do Indeed BR.");
+    const capture = await captureFor("dry-run-indeed");
+    const result = await indeed.apply(page, { url }, { dryRun: true, capture });
+    console.log(JSON.stringify(result));
+    return;
+  }
   if (args.includes("verificar-login")) {
     const signedIn = await indeed.loggedIn(page);
     if (signedIn) {
@@ -302,7 +310,7 @@ async function probe(context, loginOnly) {
 }
 
 async function main() {
-  const standalone = ["login", "verificar-login", "buscar"].includes(args[0]);
+  const standalone = ["login", "verificar-login", "buscar", "testar-vaga"].includes(args[0]);
   const api = standalone ? null : client(await connection());
   const context = await openBrowser();
   context.on("close", () => { stopping = true; });

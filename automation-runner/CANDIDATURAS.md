@@ -14,7 +14,7 @@ O painel grava START e STOP no Supabase. O Node.js consulta esse comando a cada 
 
 ## Descoberta e candidatura
 
-- Para medir a descoberta sem vínculo ou conta no painel, rode `automation-runner\runner.bat buscar "analista de qualidade" "Porto Alegre"`. Cada linha lista a fonte, vagas lidas, compatíveis e URLs individuais.
+- Para medir a descoberta sem vínculo ou conta no painel, rode `automation-runner\runner.bat buscar "analista de qualidade" "Porto Alegre"`. Cada linha lista a fonte, vagas lidas, compatíveis e URLs individuais. Use `--fonte=Gupy` para testar só a Gupy. Com `runner.bat testar-vaga "https://br.indeed.com/viewjob?jk=ID"`, é possível inspecionar uma candidatura Indeed individual sem vínculo, preenchimento de perfil ou envio.
 - A busca amplia cargos e regiões em etapas. Os adaptadores consultam Indeed BR, Vagas.com, Catho, InfoJobs, Gupy, Trabalha Brasil e os portais públicos Greenhouse, Lever e Ashby. Use `AUTOCURRICULO_GREENHOUSE`, `AUTOCURRICULO_LEVER` e `AUTOCURRICULO_ASHBY` no terminal para indicar identificadores de empresas separados por vírgulas.
 - Para LinkedIn, Glassdoor e SINE, use os links manuais no painel. Fontes sem fluxo de envio reconhecido encaminham a vaga à revisão ou marcam o formulário externo.
 - O envio pelo Indeed requer permissão da plataforma, além do consentimento individual configurado no painel. Use `set AUTOCURRICULO_INDEED_ENVIO_AUTORIZADO=1` no cmd somente quando tiver essa permissão. A primeira candidatura real depende da aprovação explícita da vaga. Para limitar o envio à vaga aprovada, passe `runner.bat "--vaga=https://br.indeed.com/viewjob?jk=ID"`. A descoberta só inclui essa URL se ela corresponder ao filtro. Sem a variável o runner consulta o portal e encaminha a candidatura à revisão.
