@@ -26,13 +26,8 @@ const publicSources = [
   }),
   listing({
     name: "Gupy", host: "gupy.io", path: /^\/jobs\/\d+/,
-    searchUrl: (term, location) => {
-      const query = new URLSearchParams({ term });
-      if (slug(location) === "rs") query.set("state", "Rio Grande do Sul");
-      else if (slug(location) === "brasil") query.set("workplaceTypes[]", "remote");
-      else if (location) query.set("city[]", location);
-      return "https://portal.gupy.io/job-search/" + query.toString().replace(/\+/g, "%20");
-    },
+    searchUrl: (term) => "https://portal.gupy.io/job-search/term%3D" + encodeURIComponent(term),
+    ready: `a[href*=".gupy.io/job/"]`,
     selectors: {
       link: "a[href*='.gupy.io/job/'], a[href*='.gupy.io/jobs/']", card: "a", title: "h3",
       company: ".MuiCard-root p", location: '[data-testid="job-location"]', mode: '[aria-label="Job Model Icon"] + span',

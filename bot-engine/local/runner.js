@@ -146,6 +146,7 @@ async function scan(context, state, api, outbox) {
   const found = new Map();
   const titles = new Set();
   const boardCache = new Map();
+  const listingCache = new Map();
   const singleJob = requestedUrl ? canonicalJobUrl(requestedUrl) : null;
   if (requestedUrl && !singleJob) throw Error("Passe a URL individual da vaga em --vaga.");
   const target = singleJob ? 1 : Math.min(TARGET, state.profile?.limite_diario || TARGET);
@@ -168,19 +169,23 @@ async function scan(context, state, api, outbox) {
           if (warning && index === 0) await post("event", { platform: source.name, message: warning });
         } else {
           const terms = index === 0 ? filters.synonyms.slice(0, 3) : filters.synonyms;
-          const locations = ["Catho", "Trabalha Brasil"].includes(source.name) ? [""] : stage.locations;
+          const locations = ["Catho", "Gupy", "Trabalha Brasil"].includes(source.name) ? [""] : stage.locations;
           search: for (const term of terms) {
             for (const location of locations) {
               if (stopping) break search;
-              await post("event", { platform: source.name, message: `Busca por ${term} · ${location || stage.name}.` });
-              const result = await source.search(page, term, location);
+              const key = JSON.stringify([source.name, term, location]);
+              if (!listingCache.has(key)) {
+                await post("event", { platform: source.name, message: `Busca por ${term} · ${location || stage.name}.` });
+                listingCache.set(key, await source.search(page, term, location));
+                await randomDelay(800, 1800);
+              }
+              const result = listingCache.get(key);
               if (result.state === "needs_login") {
                 blocked.add(source.name);
                 await post("event", { platform: source.name, message: "needs_login · Resolva o login ou a verificação no perfil local. Reinicie o runner depois." });
                 break search;
               }
               raw.push(...result.jobs);
-              await randomDelay(800, 1800);
             }
           }
         }
@@ -262,16 +267,21 @@ async function probe(context, loginOnly) {
     return;
   }
   const filters = expand({ cargo: args[1], cidade: args[2] });
-  for (const source of sources) {
+  const selected = args.find((argument) => argument.startsWith("--fonte="))?.slice(8);
+  for (const source of sources.filter(({ name }) => !selected || name === selected)) {
     const raw = new Map();
     const compatible = new Map();
     let state = "available";
     let warning = "";
     let cached;
+    const listingCache = new Map();
     try {
       outer: for (const stage of filters.stages) {
         for (const term of filters.quality ? [...filters.synonyms.slice(0, 3), "qualidade"] : filters.synonyms.slice(0, 3)) {
-          const { state: result, jobs, warning: note } = cached || await source.search(page, term, stage.locations[0]);
+          const location = ["Catho", "Gupy", "Trabalha Brasil"].includes(source.name) ? "" : stage.locations[0];
+          const key = JSON.stringify([term, location]);
+          if (!cached && !listingCache.has(key)) listingCache.set(key, await source.search(page, term, location));
+          const { state: result, jobs, warning: note } = cached || listingCache.get(key);
           if (source.once) cached = { state: result, jobs, warning: note };
           state = result;
           warning = note || warning;

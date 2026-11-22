@@ -62,7 +62,7 @@ async function readListing(page, config) {
   }, config);
 }
 
-function listing({ name, host, path, searchUrl, selectors, transform = (job) => job }) {
+function listing({ name, host, path, searchUrl, selectors, ready, transform = (job) => job }) {
   return {
     name,
     detectState,
@@ -71,6 +71,7 @@ function listing({ name, host, path, searchUrl, selectors, transform = (job) => 
       const response = await page.goto(searchUrl(term, location), { waitUntil: "domcontentloaded", timeout: 18_000 });
       const state = await this.detectState(page, response);
       if (state !== "available") return { state, jobs: [] };
+      if (ready) await page.locator(ready).first().waitFor({ state: "attached", timeout: 3500 }).catch(() => {});
       const rows = await readListing(page, selectors);
       return { state, jobs: rows.map((raw) => this.parseJob(raw)).filter(Boolean) };
     },
