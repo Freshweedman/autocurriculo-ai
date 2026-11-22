@@ -70,8 +70,8 @@ export async function POST(request: Request) {
 
   const live = body.action === "apply";
   if (live && process.env.PUBLIC_APPLY_LIVE !== "enabled") return runnerError("O envio real está desligado neste ambiente.", 409);
-  const token = process.env.ACTIONS_PUBLIC_APPLICATION_TOKEN;
-  const secret = process.env.ACTIONS_PUBLIC_APPLICATION_WORKER_SECRET;
+  const token = process.env.ACTIONS_PUBLIC_APPLICATION_TOKEN?.trim();
+  const secret = process.env.ACTIONS_PUBLIC_APPLICATION_WORKER_SECRET?.trim();
   if (!token?.startsWith("github_pat_") || !secret || secret.length < 32)
     return runnerError("O serviço de formulários ainda está sem configuração de acesso.", 503);
   if (!live) {
