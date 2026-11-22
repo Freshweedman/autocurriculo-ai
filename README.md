@@ -1,6 +1,8 @@
 # AutoCurriculo AI
 
-SaaS de automacao de candidaturas de emprego. Encontra vagas, envia curriculos automaticamente e coleta leads de empresas via Google.
+Para o fluxo de candidaturas pelo START no Windows, veja [instalação e uso do runner local](automation-runner/CANDIDATURAS.md).
+
+Painel de busca e acompanhamento de candidaturas, com runner local em Node.js e Playwright.
 
 ---
 
@@ -8,7 +10,7 @@ SaaS de automacao de candidaturas de emprego. Encontra vagas, envia curriculos a
 
 ```
 autocurriculo-ai/
-├── src/                          # Next.js 14 App (Frontend + API)
+├── src/                          # Next.js (Frontend + API)
 │   ├── app/
 │   │   ├── login/               # Pagina de login
 │   │   ├── register/            # Pagina de registro
@@ -21,7 +23,7 @@ autocurriculo-ai/
 │   ├── components/              # Componentes reutilizaveis
 │   └── lib/supabase/            # Clientes Supabase
 │
-├── bot-engine/                   # Bot Playwright (roda no GitHub Actions)
+├── bot-engine/                   # Motor Playwright e runner local em local/
 │   ├── bot.js                    # Entry point
 │   ├── platforms/               # Integracoes por plataforma
 │   │   ├── indeed.js
@@ -41,9 +43,8 @@ autocurriculo-ai/
 ## Funcionalidades
 
 - **Dashboard Web** - Upload curriculo, configurar cargo/cidade, limite diario
-- **Bot Auto** - Playwright com delay humano, evita deteccao
-- **Indeed** - Login + busca + candidatura simplificada + upload PDF
-- **Plataformas genericas** - Detecta `<input type="file">` automaticamente
+- **Runner local** - Sessão persistente no Chrome, busca de vagas e fila controlada pelo START/STOP
+- **Candidaturas** - Formulários reconhecidos, currículo PDF e confirmação registrada quando o portal comprova o envio
 - **Google Scraper** - Coleta empresas, telefones, emails, sites
 - **Historico** - Acompanha candidaturas e leads em tempo real
 - **100% Gratis** - GitHub Actions ilimitado (repos publicos)
@@ -67,23 +68,9 @@ autocurriculo-ai/
 3. Configure as variaveis de ambiente (`.env.example` como referencia)
 4. Deploy
 
-### 3. GitHub Actions (Bot)
+### 3. Runner local de candidaturas
 
-1. No GitHub, va em **Settings > Secrets and variables > Actions**
-2. Adicione os seguintes secrets:
-
-| Secret | Descricao |
-|--------|-----------|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL do Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key do Supabase |
-| `BOT_API_KEY` | Chave aleatoria p/ webhook auth |
-| `API_URL` | URL do deploy Vercel |
-| `INDEED_EMAIL` | Email da conta Indeed (secundaria) |
-| `INDEED_SENHA` | Senha da conta Indeed |
-
-3. Va em **Actions > AutoCurriculo AI Bot > Run workflow**
-
-O bot roda automaticamente Seg-Sex as 9h BRT.
+Aplique as migrations até `012_local_runner.sql` e siga o [guia do runner para Windows](automation-runner/CANDIDATURAS.md).
 
 ---
 

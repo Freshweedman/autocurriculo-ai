@@ -1,77 +1,91 @@
-import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { randomBytes, randomUUID } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { digest, isUuid, record, runnerColumns, runnerError, runnerUser } from "@/lib/local-runner";
 
-export async function POST() {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const token = process.env.GITHUB_TOKEN;
-  const repo  = "Freshweedman/autocurriculo-ai";
-
-  if (!token) {
-    return NextResponse.json({ error: "GITHUB_TOKEN nao configurado" }, { status: 500 });
-  }
-
+export async function GET(request: Request) {
+  const user = await runnerUser();
+  if (!user) return runnerError("Sessão expirada.", 401);
   const admin = createAdminClient();
-  const { data: profile, error: profileError } = await admin
-    .from("profiles")
-    .select("direct_submission_enabled")
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (profileError) return NextResponse.json({ error: "Não foi possível verificar as preferências da automação." }, { status: 500 });
+  const evidence = new URL(request.url).searchParams.get("evidence");
+  if (evidence) {
+    if (!isUuid(evidence)) return runnerError("Vaga inválida.");
+    const { data } = await admin.from("local_runner_jobs").select("screenshot_path")
+      .eq("user_id", user.id).eq("id", evidence).maybeSingle();
+    if (!data?.screenshot_path) return runnerError("Captura indisponível.", 404);
+    const result = await admin.storage.from("runner-evidence").createSignedUrl(data.screenshot_path, 60);
+    return result.data ? Response.redirect(result.data.signedUrl) : runnerError("Captura indisponível.", 404);
+  }
+  const results = await Promise.all([
+    admin.from("local_runner_control").select(runnerColumns).eq("user_id", user.id).maybeSingle(),
+    admin.from("local_runner_jobs").select("id,platform,url,title,company,status,detail,score,confirmation_text,confirmation_url,screenshot_path,updated_at")
+      .eq("user_id", user.id).order("updated_at", { ascending: false }).limit(30),
+    admin.from("local_runner_jobs").select("id,platform,url,title,company,status,detail")
+      .eq("user_id", user.id).in("status", ["needs_login", "needs_review", "applied_unconfirmed"]).order("updated_at", { ascending: false }).limit(30),
+    admin.from("local_runner_events").select("id,platform,message,created_at")
+      .eq("user_id", user.id).order("id", { ascending: false }).limit(40),
+    admin.rpc("local_runner_metrics", { p_user: user.id }),
+    admin.from("resumes").select("id,name,is_default").eq("user_id", user.id).order("is_default", { ascending: false }),
+  ]);
+  if (results.some(({ error }) => error)) return runnerError("Dados do runner indisponíveis. Verifique a migration 012.", 503);
+  const [control, jobs, review, events, metrics, resumes] = results.map(({ data }) => data);
+  const station = control as { last_seen_at: string | null } | null;
+  const online = Boolean(station?.last_seen_at && Date.now() - new Date(station.last_seen_at).getTime() < 90_000);
+  return Response.json({ control, online, jobs, review, events, metrics, resumes });
+}
 
-  // Consent only authorizes adapters that can provide a platform confirmation.
-  // The worker independently verifies every connection before it opens a form.
-  const mode = profile?.direct_submission_enabled ? "direct_authorized" : "discovery";
-  const staleBefore = new Date(Date.now() - 90 * 60_000).toISOString();
-  const { data: staleRuns } = await admin
-    .from("automation_runs")
-    .update({ status: "cancelled", finished_at: new Date().toISOString(), error_message: "Execução expirada antes de o worker concluir." })
-    .eq("user_id", user.id)
-    .in("status", ["queued", "running"])
-    .lt("created_at", staleBefore)
-    .select("id");
-  if (staleRuns?.length) await admin.from("automation_run_events").insert(staleRuns.map((stale) => ({ run_id: stale.id, user_id: user.id, event_type: "cancelled", message: "Execução expirada foi encerrada com segurança antes de iniciar uma nova." })));
-  const { data: run, error: runError } = await admin
-    .from("automation_runs")
-    .insert({ user_id: user.id, trigger_type: "manual", status: "queued", summary: { mode } })
-    .select("id")
-    .single();
-  if (runError || !run) return NextResponse.json({ error: "Não foi possível registrar a execução. Verifique se a migration 011 foi aplicada." }, { status: 500 });
-  await admin.from("automation_run_events").insert({ run_id: run.id, user_id: user.id, event_type: "queued", message: "Execução solicitada pela pessoa usuária.", metadata: { mode } });
-
-  const resp = await fetch(
-    `https://api.github.com/repos/${repo}/actions/workflows/bot.yml/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `token ${token}`,
-        Accept: "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ref: "main", inputs: { user_id: user.id, run_id: run.id } }),
+export async function POST(request: Request) {
+  const user = await runnerUser();
+  if (!user) return runnerError("Sessão expirada.", 401);
+  const admin = createAdminClient();
+  const body: unknown = request.headers.get("content-type")?.includes("application/json")
+    ? await request.json().catch(() => null) : { action: "start" };
+  if (!record(body)) return runnerError("Ação inválida.");
+  const action = body.action;
+  const user_id = user.id;
+  if (action === "pair") {
+    const token = randomBytes(32).toString("hex");
+    const { error } = await admin.from("local_runner_control").upsert({
+      user_id, token_hash: digest(token), enabled: false, instance_id: null, last_seen_at: null, generation: randomUUID(),
+    }, { onConflict: "user_id" });
+    return error ? runnerError("Não foi possível vincular o runner. Verifique a migration 012.", 503) : Response.json({ token });
+  }
+  if (action === "retry") {
+    if (!isUuid(body.id)) return runnerError("Vaga inválida.");
+    const { data, error } = await admin.from("local_runner_jobs").update({
+      status: "queued", updated_at: new Date().toISOString(), detail: "Aguardando a próxima busca do runner.",
+    }).eq("user_id", user_id).eq("id", body.id).in("status", ["needs_review", "needs_login", "failed"])
+      .is("attempt_at", null).select("id").maybeSingle();
+    if (error || !data) return runnerError("Esta vaga não pode voltar à fila.", 409);
+    return Response.json({ message: "Vaga recolocada na fila." });
+  }
+  if (action === "settings") {
+    const limits = body.limits;
+    const answers = body.answers;
+    const resume = body.resume;
+    if (!record(limits) || !record(answers) || Object.keys(limits).length > 15 || Object.keys(answers).length > 50
+      || Object.entries(limits).some(([key, value]) => key.length > 50 || typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > 40)
+      || Object.entries(answers).some(([key, value]) => key.length > 300 || typeof value !== "string" || value.length > 1000)
+      || (resume !== null && !isUuid(resume))) return runnerError("Confira limites de 1 a 40, respostas e currículo.");
+    if (resume !== null) {
+      const { data } = await admin.from("resumes").select("id").eq("user_id", user_id).eq("id", resume).maybeSingle();
+      if (!data) return runnerError("Currículo indisponível.");
     }
-  );
-
-  if (resp.status === 204) {
-    const message = mode === "direct_authorized"
-      ? "Envio autorizado iniciado. O worker só registra candidatura quando a plataforma apresentar uma confirmação verificável."
-      : "Descoberta iniciada. O sistema vai buscar e classificar vagas, sem enviar currículos.";
-    return NextResponse.json({ ok: true, runId: run.id, mode, message });
+    const { error } = await admin.from("local_runner_control").upsert({
+      user_id, platform_limits: limits, screening_answers: answers, resume_id: resume,
+    }, { onConflict: "user_id" });
+    return error ? runnerError("Não foi possível salvar as configurações.", 503) : Response.json({ message: "Configurações salvas." });
   }
-
-  await admin.from("automation_runs").update({ status: "failed", finished_at: new Date().toISOString(), error_message: `GitHub Actions: ${resp.status}` }).eq("id", run.id);
-  await admin.from("automation_run_events").insert({ run_id: run.id, user_id: user.id, event_type: "failed", message: "Não foi possível iniciar a automação no GitHub Actions.", metadata: { status: resp.status } });
-
-  const body = await resp.text();
-  if (resp.status === 422 && body.includes("disabled workflow")) {
-    return NextResponse.json({
-      error: "A automação está desativada no GitHub. Um administrador do repositório precisa abrir Actions → AutoCurriculo AI Bot → Enable workflow. Depois, tente novamente.",
-      code: "WORKFLOW_DISABLED",
-    }, { status: 503 });
+  if (action !== "start" && action !== "stop") return runnerError("Ação inválida.");
+  const enabled = action === "start";
+  const { data, error } = await admin.from("local_runner_control")
+    .update({ enabled, generation: randomUUID() }).eq("user_id", user_id).eq("enabled", !enabled)
+    .not("token_hash", "is", null).select("user_id").maybeSingle();
+  if (error) return runnerError("Não foi possível atualizar o runner. Verifique a migration 012.", 503);
+  if (!data) {
+    const existing = await admin.from("local_runner_control").select("enabled").eq("user_id", user_id).not("token_hash", "is", null).maybeSingle();
+    if (!existing.data) return runnerError("Vincule o runner na Central de Automação antes de iniciar.", 409);
+  } else {
+    await admin.from("local_runner_events").insert({ user_id, message: enabled ? "START solicitado pelo painel." : "STOP solicitado pelo painel." });
   }
-  return NextResponse.json({ error: `GitHub API: ${resp.status} ${body}` }, { status: 500 });
+  return Response.json({ enabled, ok: true, message: enabled ? "START registrado. O runner local recebe o comando na próxima consulta." : "STOP registrado." });
 }

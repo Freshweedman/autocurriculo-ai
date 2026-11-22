@@ -13,7 +13,8 @@ function canonicalJobUrl(value) {
     if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password) return null;
     if (BLOCKED_PATHS.test(parsed.pathname)) return null;
     const knownAtsPath = (parsed.hostname.endsWith("jobs.lever.co") || parsed.hostname.endsWith("jobs.ashbyhq.com")) && /^\/[^/]+\/[^/?#]{4,}/.test(parsed.pathname);
-    const hasIndividualPath = JOB_PATH.test(parsed.pathname) || knownAtsPath;
+    const infoJobsPath = /(^|\.)infojobs\.com\.br$/.test(parsed.hostname) && /^\/vaga-de-.+__\d+\.aspx$/i.test(parsed.pathname);
+    const hasIndividualPath = JOB_PATH.test(parsed.pathname) || knownAtsPath || infoJobsPath;
     const id = [...parsed.searchParams.keys()].some((key) => TRACKING_KEYS.has(key.toLowerCase()));
     if (!hasIndividualPath && !id) return null;
     const clean = new URL(parsed.origin + parsed.pathname.replace(/\/$/, ""));
