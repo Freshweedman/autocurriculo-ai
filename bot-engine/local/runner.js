@@ -142,7 +142,7 @@ const backoff = new Map();
 async function scan(context, state, api, outbox) {
   const post = (action, payload) => api(action, { ...payload, generation: state.generation });
   const dryRun = args.includes("--dry-run");
-  const filters = expand(state.profile, state.applicant, state.search);
+  const filters = expand(state.profile ?? {}, state.applicant, state.search ?? {});
   const found = new Map();
   const titles = new Set();
   const boardCache = new Map();
