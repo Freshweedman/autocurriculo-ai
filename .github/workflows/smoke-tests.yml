@@ -8,7 +8,7 @@ on:
         required: true
         default: 'https://autocurriculo-ai.vercel.app'
   workflow_run:
-    workflows: ["AutoCurriculo AI Bot"]
+    workflows: ["Busca de vagas"]
     types: [completed]
 
 permissions:
