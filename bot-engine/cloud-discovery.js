@@ -6,7 +6,6 @@ const base = (process.env.API_URL || "https://autocurriculo-ai.vercel.app").repl
 const database = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const apiKey = process.env.BOT_API_KEY;
-const userId = process.env.BOT_USER_ID;
 const runId = process.env.AUTOMATION_RUN_ID;
 const activeSources = sources.filter((source) => !["Indeed", "Trabalha Brasil"].includes(source.name));
 
@@ -77,8 +76,10 @@ async function discover(browser, profile) {
 }
 
 async function main() {
-  if (!database || !key || !apiKey || Boolean(userId) !== Boolean(runId)) throw Error("Configuração da busca incompleta.");
-  const criteria = userId ? { user_id: "eq." + userId } : { bot_ativo: "is.true" };
+  if (!database || !key || !apiKey) throw Error("Configuração da busca incompleta.");
+  const [request] = runId ? await read("automation_runs", { id: "eq." + runId, status: "eq.queued", trigger_type: "eq.manual", select: "user_id", limit: 1 }) : [];
+  if (runId && !request) throw Error("Busca solicitada não está mais na fila.");
+  const criteria = request ? { user_id: "eq." + request.user_id } : { bot_ativo: "is.true" };
   const profiles = await read("profiles", { ...criteria, select: "user_id,cargo,cidade", "cargo": "not.is.null" });
   const eligible = profiles.filter((profile) => profile.cargo?.trim());
   if (!eligible.length) return;

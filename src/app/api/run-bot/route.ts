@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     const dispatch = await fetch("https://api.github.com/repos/Freshweedman/autocurriculo-ai/actions/workflows/bot.yml/dispatches", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "Content-Type": "application/json" },
-      body: JSON.stringify({ ref: "main", inputs: { user_id: user.id, run_id: run.id } }),
+      body: JSON.stringify({ ref: "main", inputs: { run_id: run.id } }),
       signal: AbortSignal.timeout(12_000),
     });
     if (!dispatch.ok) throw Error(`GitHub Actions respondeu HTTP ${dispatch.status}.`);

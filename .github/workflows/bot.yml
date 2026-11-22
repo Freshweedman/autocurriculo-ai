@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       user_id:
-        description: Perfil da busca solicitada
+        description: Compatibilidade com solicitação anterior
         required: false
         type: string
       run_id:
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: busca-vagas-${{ inputs.user_id || 'scheduled' }}
+  group: busca-vagas-${{ inputs.run_id || 'scheduled' }}
   cancel-in-progress: false
 
 jobs:
@@ -41,6 +41,5 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           BOT_API_KEY: ${{ secrets.BOT_API_KEY }}
           API_URL: ${{ secrets.API_URL }}
-          BOT_USER_ID: ${{ inputs.user_id }}
           AUTOMATION_RUN_ID: ${{ inputs.run_id }}
         run: node cloud-discovery.js
