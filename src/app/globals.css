@@ -372,5 +372,5 @@ table th,table td{border-color:var(--divider)}tbody tr:hover{background:#162738}
 .assisted-job-steps{display:grid;width:100%;flex-basis:100%;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;border-top:1px solid var(--divider);padding-top:14px}
 .assisted-job-steps>div{display:grid;gap:8px;align-content:start}
 .assisted-job-steps strong{font-size:13px}
-.assisted-job-steps a,.assisted-job-steps button{justify-content:center;min-height:44px}
-@media(max-width:600px){.assisted-job-steps{grid-template-columns:1fr}.assisted-job-steps>div{grid-template-columns:1fr minmax(120px,1fr);align-items:center}}
+.assisted-job-steps a,.assisted-job-steps button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:8px;border-radius:8px;text-align:center}
+@media(max-width:700px){.assisted-job-steps{flex-basis:auto;grid-template-columns:1fr}.assisted-job-steps>div{grid-template-columns:1fr minmax(120px,1fr);align-items:center}}
