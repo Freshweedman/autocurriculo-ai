@@ -1,190 +1,107 @@
 "use client";
 
-import { Activity, Clock3, Play, Square } from "lucide-react";
+import { CalendarDays, Search } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-type Control = {
-  enabled: boolean;
-  last_seen_at: string | null;
-  platform_limits: Record<string, number>;
-  screening_answers: Record<string, string>;
-  resume_id: string | null;
-};
-type Job = { id: string; platform: string; url: string; title: string; company: string; status: string; detail?: string; confirmation_text?: string; confirmation_url?: string; screenshot_path?: string };
-type Event = { id: number; platform: string | null; message: string; created_at: string };
-type Metric = { platform: string; today: number; week: number; month: number };
 type Snapshot = {
-  control: Control | null; online: boolean; jobs: Job[]; review: Job[]; events: Event[]; metrics: Metric[];
-  resumes: { id: string; name: string; is_default: boolean }[];
+  profile: { cargo: string | null; cidade: string | null; bot_ativo: boolean } | null;
+  resume: { name: string } | null;
+  opportunityCount: number;
+  runs: { id: string; status: string; trigger_type: string; created_at: string; error_message: string | null }[];
+  events: { id: number; message: string; created_at: string }[];
 };
 
-const labels: Record<string, string> = {
-  discovered: "Descoberta", queued: "Na fila", applying: "Envio reservado", applied_confirmed: "Confirmada",
-  applied_unconfirmed: "Confirme no portal", needs_login: "Login necessário", needs_review: "Revisão necessária",
-  skipped_external: "Formulário externo", skipped_filter: "Fora do filtro", failed: "Falha",
+const statuses: Record<string, string> = {
+  queued: "Na fila", running: "Buscando vagas", succeeded: "Busca encerrada",
+  failed: "Busca interrompida", cancelled: "Cancelada", paused: "Pausada",
 };
-
-const formatTime = (value: string) => new Date(value).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
-
-function parsePairs(text: string) {
-  return text.split("\n").filter((line) => line.trim()).map((line) => {
-    const boundary = line.indexOf("=");
-    if (boundary < 1 || !line.slice(boundary + 1).trim()) throw Error("Preencha cada linha no formato indicado.");
-    return [line.slice(0, boundary).trim(), line.slice(boundary + 1).trim()];
-  });
-}
-
-function JobList({ items, retry }: { items: Job[]; retry?: (id: string) => void }) {
-  return items.length ? <div className="run-list">{items.map((job) => <article key={job.id}>
-    <div>
-      <strong><a href={job.url} target="_blank" rel="noreferrer">{job.title}</a></strong>
-      <small>{job.company} · {job.platform} · {labels[job.status] || job.status}</small>
-      {job.detail && <p>{job.detail}</p>}
-      {job.confirmation_text && <p>{job.confirmation_text}</p>}
-      {retry && ["needs_review", "needs_login", "failed"].includes(job.status) && <button className="btn-outline" onClick={() => retry(job.id)}>Voltar à fila</button>}
-      {job.screenshot_path && <a href={`/api/run-bot?evidence=${job.id}`} target="_blank" rel="noreferrer">Ver captura da confirmação</a>}
-    </div>
-  </article>)}</div> : <p>Nenhuma vaga nesta lista.</p>;
-}
+const dateLabel = (value: string) => new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 
 export default function AutomacaoPage() {
   const [snapshot, setSnapshot] = useState<Snapshot>();
   const [message, setMessage] = useState("");
-  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [token, setToken] = useState("");
-  const [editing, setEditing] = useState(false);
-  const [resume, setResume] = useState("");
-  const [limits, setLimits] = useState("");
-  const [answers, setAnswers] = useState("");
-
   const load = useCallback(async () => {
     try {
       const response = await fetch("/api/run-bot", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw Error(data.error);
       setSnapshot(data);
-      setLoadError("");
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Não foi possível consultar o runner.");
+      setError("");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Não foi possível consultar a busca.");
     }
   }, []);
-
   useEffect(() => {
-    const initial = window.setTimeout(() => void load(), 0);
-    const poll = window.setInterval(() => void load(), 5000);
-    return () => { window.clearTimeout(initial); window.clearInterval(poll); };
+    const first = window.setTimeout(() => void load(), 0);
+    const poll = window.setInterval(() => void load(), 7000);
+    return () => { window.clearTimeout(first); window.clearInterval(poll); };
   }, [load]);
 
-  async function command(action: string, extra: Record<string, unknown> = {}) {
+  async function command(action: "start" | "schedule", enabled?: boolean) {
     setBusy(true);
     setMessage("");
     try {
       const response = await fetch("/api/run-bot", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...extra }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, enabled }),
       });
-      const body = await response.json();
-      if (!response.ok) throw Error(body.error || "Não foi possível atualizar o runner.");
-      if (action === "pair") setToken(body.token);
-      if (action === "settings") setEditing(false);
-      setMessage(body.message || "Código gerado. Cole-o no terminal do runner.");
+      const result = await response.json();
+      setMessage(result.message || result.error || "Não foi possível atualizar a busca.");
       await load();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "O painel perdeu a comunicação com o runner.");
-    } finally {
-      setBusy(false);
-    }
+    } catch { setMessage("Não foi possível atualizar a busca."); }
+    finally { setBusy(false); }
   }
 
-  const control = snapshot?.control;
-  const online = snapshot?.online;
-  const totals = snapshot?.metrics.reduce((acc, item) => ({
-    today: acc.today + item.today, week: acc.week + item.week, month: acc.month + item.month,
-  }), { today: 0, week: 0, month: 0 });
-
+  const latest = snapshot?.runs[0];
+  const searching = latest && ["queued", "running"].includes(latest.status);
+  const schedule = snapshot?.profile?.bot_ativo;
   return <div className="automation-page resource-page">
-    <header className="page-heading">
-      <div><h1>Central de Automação</h1><p>Controle a busca e acompanhe as candidaturas que receberam confirmação da plataforma.</p></div>
+    <header className="page-heading"><div><h1>Busca de vagas</h1>
+      <p>Encontre vagas compatíveis e prepare suas candidaturas pelo celular.</p></div>
       <div className="page-actions">
-        <button className="btn-primary" disabled={busy || !snapshot} onClick={() => void command(control?.enabled ? "stop" : "start")}>
-          {control?.enabled ? <Square size={16} /> : <Play size={16} />}{control?.enabled ? "STOP" : "START"}
+        <button className="btn-primary" disabled={!snapshot || busy || !snapshot.profile?.cargo || Boolean(searching)} onClick={() => void command("start")}>
+          <Search size={16} />{searching ? statuses[latest.status] : "Buscar vagas agora"}
         </button>
+        <Link className="btn-outline" href="/dashboard/oportunidades">Ver vagas</Link>
       </div>
     </header>
     {message && <p className="notice" role="status">{message}</p>}
-    {loadError && <p className="notice" role="alert">{loadError}</p>}
-    {snapshot && <section className="automation-summary" aria-label="Resumo do runner">
-      <article><span>Runner local</span><strong>{online ? "Online" : "Offline"}</strong>
-        <small>{control?.last_seen_at ? `Última batida em ${formatTime(control.last_seen_at)}` : "Vincule este computador para iniciar."}</small>
-        <small>{control?.enabled ? "START ativo" : "Pausado"}</small>
-      </article>
-      <article><span>Confirmadas</span><strong>{totals?.today ?? 0} hoje</strong><small>{totals?.week ?? 0} nesta semana</small></article>
-      <article><span>Meta mensal</span><strong>{totals?.month ?? 0} / 500</strong><progress max={500} value={totals?.month ?? 0} aria-label="Progresso da meta mensal" /></article>
-    </section>}
-    <section className="automation-panel">
-      <div className="panel-heading">
-        <h2>Configuração do runner</h2>
-        <div className="page-actions">
-          <button className="btn-outline" disabled={busy} onClick={() => {
-            if (control?.last_seen_at && !window.confirm("Gerar outro código desvincula o runner atual e pausa a execução. Continuar?")) return;
-            void command("pair");
-          }}>Gerar código de vínculo</button>
-          <button className="btn-outline" disabled={!snapshot || busy} onClick={() => {
-            setLimits(Object.entries(control?.platform_limits || {}).map(([key, value]) => `${key} = ${value}`).join("\n"));
-            setAnswers(Object.entries(control?.screening_answers || {}).map(([key, value]) => `${key} = ${value}`).join("\n"));
-            setResume(control?.resume_id || "");
-            setEditing((value) => !value);
-          }}>{editing ? "Fechar ajustes" : "Ajustar limites e currículo"}</button>
-        </div>
-      </div>
-      {token && <div className="notice"><label htmlFor="runner-code">Cole este código ao executar <code>runner.bat vincular</code></label>
-        <input id="runner-code" readOnly autoComplete="off" value={token} onFocus={(event) => event.target.select()} />
-        <button className="btn-outline" onClick={() => setToken("")}>Ocultar código</button>
-      </div>}
-      {editing && <form className="automation-runner-form" onSubmit={(event) => {
-        event.preventDefault();
-        try {
-          const platformLimits = Object.fromEntries(parsePairs(limits).map(([key, value]) => [key, Number(value)]));
-          void command("settings", { limits: platformLimits, answers: Object.fromEntries(parsePairs(answers)), resume: resume || null });
-        } catch (error) { setMessage(error instanceof Error ? error.message : "Confira os campos."); }
-      }}>
-        <label>Currículo usado pelo runner<select value={resume} onChange={(event) => setResume(event.target.value)}>
-          <option value="">Usar o currículo padrão</option>
-          {snapshot?.resumes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select></label>
-        <label>Limite diário por plataforma · padrão de 30<textarea rows={2} value={limits} onChange={(event) => setLimits(event.target.value)} placeholder="Indeed = 25" /></label>
-        <label>Respostas de triagem · pergunta exata = resposta<textarea rows={3} value={answers} onChange={(event) => setAnswers(event.target.value)} placeholder="Qual é a sua disponibilidade? = Imediata" /></label>
-        <button className="btn-primary" disabled={busy}>Salvar ajustes</button>
-      </form>}
-    </section>
+    {error && <p className="notice" role="alert">{error}</p>}
     {snapshot && <>
-      <section className="automation-layout">
-        <div className="automation-panel">
-          <div className="panel-heading"><h2>Vagas que precisam de você</h2></div>
-          <JobList items={snapshot.review} retry={busy ? undefined : (id) => void command("retry", { id })} />
-          <p>Acesse a vaga para revisar o formulário. Para login ou verificação, abra <code>runner.bat login</code> com o runner fechado.</p>
-          <p className="runner-source-links">
-            <a href="https://www.linkedin.com/jobs/" target="_blank" rel="noreferrer">LinkedIn Jobs</a>
-            <a href="https://www.glassdoor.com.br/Vaga/index.htm" target="_blank" rel="noreferrer">Glassdoor</a>
-            <a href="https://servicos.mte.gov.br/" target="_blank" rel="noreferrer">SINE / Emprega Brasil</a>
-          </p>
+      {!snapshot.profile?.cargo && <p className="notice">Defina o cargo que você procura em <Link href="/dashboard/configuracoes">Configurações</Link>.</p>}
+      <section className="automation-summary" aria-label="Resumo da busca">
+        <article><span>Perfil de busca</span><strong>{snapshot.profile?.cargo || "Cargo pendente"}</strong><small>{snapshot.profile?.cidade || "Sem cidade definida"}</small></article>
+        <article><span>Vagas disponíveis</span><strong>{snapshot.opportunityCount}</strong><small><Link href="/dashboard/oportunidades">Preparar candidatura</Link></small></article>
+        <article><span>Currículo padrão</span><strong>{snapshot.resume?.name || "Pendente"}</strong><small><Link href="/dashboard/curriculos">Gerenciar currículo</Link></small></article>
+      </section>
+      <section className="automation-panel">
+        <div className="panel-heading">
+          <h2><CalendarDays size={16} /> Busca automática</h2>
+          <button className="btn-outline" disabled={busy || !snapshot.profile?.cargo} onClick={() => void command("schedule", !schedule)}>
+            {schedule ? "Pausar busca automática" : "Ativar busca automática"}
+          </button>
         </div>
-        <div className="automation-panel">
-          <div className="panel-heading"><h2>Confirmadas por plataforma</h2></div>
-          {snapshot.metrics.length ? <div className="run-list">{snapshot.metrics.map((metric) => <article key={metric.platform}>
-            <strong>{metric.platform}</strong><small>{metric.today} hoje · {metric.week} semana · {metric.month} mês</small>
-          </article>)}</div> : <p>Nenhuma confirmação registrada pelo runner neste mês.</p>}
-        </div>
+        <p>{schedule ? "Ativada para dias úteis. As vagas aparecem na sua conta mesmo com o navegador fechado." : "Ative para receber novas vagas em dias úteis."}</p>
       </section>
       <section className="automation-layout">
-        <div className="automation-panel"><div className="panel-heading"><h2>Fila e resultados recentes</h2></div><JobList items={snapshot.jobs} /></div>
         <div className="automation-panel">
-          <div className="panel-heading"><h2>Atividade</h2><Activity size={17} /></div>
-          {snapshot.events.length ? <ol className="run-timeline">{snapshot.events.map((event) => <li key={event.id}>
-            <span className="timeline-dot"><Clock3 size={14} /></span>
-            <div><strong>{event.platform ? `${event.platform} · ` : ""}{event.message}</strong><small>{formatTime(event.created_at)}</small></div>
-          </li>)}</ol> : <p>As etapas do runner aparecem aqui após o START.</p>}
+          <div className="panel-heading"><h2>Última busca</h2></div>
+          {latest ? <div className="run-list">
+            <article><strong>{statuses[latest.status] || latest.status}</strong><small>{dateLabel(latest.created_at)}</small></article>
+            {latest.error_message && <p>{latest.error_message}</p>}
+          </div> : <p>Inicie uma busca para acompanhar o progresso.</p>}
+          {snapshot.events.length > 0 && <ol className="run-timeline">{snapshot.events.map((item) => <li key={item.id}>
+            <span className="timeline-dot"><Search size={13} /></span><div><strong>{item.message}</strong><small>{dateLabel(item.created_at)}</small></div>
+          </li>)}</ol>}
+        </div>
+        <div className="automation-panel">
+          <div className="panel-heading"><h2>Histórico de buscas</h2></div>
+          <div className="run-list">{snapshot.runs.slice(1).map((run) => <article key={run.id}>
+            <strong>{statuses[run.status] || run.status}</strong><small>{dateLabel(run.created_at)} · {run.trigger_type === "scheduled" ? "Automática" : "Manual"}</small>
+          </article>)}</div>
+          {snapshot.runs.length < 2 && <p>As próximas buscas aparecerão aqui.</p>}
         </div>
       </section>
     </>}

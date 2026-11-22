@@ -1,16 +1,16 @@
-name: AutoCurriculo AI Bot
+name: Busca de vagas
 
 on:
   schedule:
-    - cron: '0 12 * * 1-5'  # Seg-Sex 9h BRT (12h UTC)
-  workflow_dispatch:          # Manual trigger, scoped to the authenticated user
+    - cron: '13 12 * * 1-5'
+  workflow_dispatch:
     inputs:
       user_id:
-        description: "Authenticated profile to process"
+        description: Perfil da busca solicitada
         required: false
         type: string
       run_id:
-        description: "Persisted automation run"
+        description: Execução registrada no painel
         required: false
         type: string
 
@@ -18,75 +18,29 @@ permissions:
   contents: read
 
 concurrency:
-  group: autocurriculo-bot-${{ github.event.inputs.user_id || 'scheduled' }}
+  group: busca-vagas-${{ inputs.user_id || 'scheduled' }}
   cancel-in-progress: false
 
 jobs:
-  run-bot:
-    # Playwright 1.60 currently supports Ubuntu 24.04, not the Ubuntu 26 image
-    # behind ubuntu-latest.
+  discovery:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60       # Allow up to 60 min for 100+ applications
-
+    timeout-minutes: 45
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
-
-      - name: Install bot dependencies
+      - run: npm ci
         working-directory: bot-engine
-        run: npm ci
-
-      - name: Install Playwright browsers
+      - run: npx playwright install chromium --with-deps
         working-directory: bot-engine
-        run: npx playwright install chromium --with-deps
-
-      - name: Prepare bot log
-        run: "mkdir -p /tmp && : > /tmp/bot-log.txt"
-
-      - name: Mark manual execution as running
-        if: ${{ inputs.run_id != '' && inputs.user_id != '' }}
-        env:
-          API_URL: ${{ secrets.API_URL }}
-          BOT_API_KEY: ${{ secrets.BOT_API_KEY }}
-          AUTOMATION_RUN_ID: ${{ inputs.run_id }}
-          BOT_USER_ID: ${{ inputs.user_id }}
-        run: |
-          BASE_URL="${API_URL:-https://autocurriculo-ai.vercel.app}"
-          curl --fail-with-body --retry 3 --retry-delay 2 \
-            -X POST "$BASE_URL/api/webhook/automation-runs" \
-            -H "Content-Type: application/json" \
-            --data "{\"apiKey\":\"$BOT_API_KEY\",\"runId\":\"$AUTOMATION_RUN_ID\",\"userId\":\"$BOT_USER_ID\",\"eventType\":\"started\",\"message\":\"Runner iniciado no GitHub Actions.\",\"metadata\":{\"source\":\"github_actions\"},\"runStatus\":\"running\"}"
-
-      - name: Run bot
+      - name: Buscar vagas
         working-directory: bot-engine
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CONNECTION_ENCRYPTION_KEY: ${{ secrets.CONNECTION_ENCRYPTION_KEY }}
           BOT_API_KEY: ${{ secrets.BOT_API_KEY }}
           API_URL: ${{ secrets.API_URL }}
           BOT_USER_ID: ${{ inputs.user_id }}
           AUTOMATION_RUN_ID: ${{ inputs.run_id }}
-        run: node bot.js
-
-      - name: Upload logs (always)
-        if: always()
-        uses: actions/upload-artifact@v5
-        with:
-          name: bot-logs
-          path: /tmp/bot-log.txt
-          if-no-files-found: warn
-
-      - name: Upload debug screenshots (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v5
-        with:
-          name: error-screenshots
-          path: /tmp/*.png
-          if-no-files-found: ignore
+        run: node cloud-discovery.js

@@ -6,7 +6,8 @@ export function canonicalJobUrl(value: string | undefined): string | null {
     if (parsed.protocol !== "https:" || !parsed.hostname || parsed.username || parsed.password) return null;
     if (/\/(?:search|buscar|busca|login|auth|oauth|companies?|empresas?|vagas?-de-emprego|jobs?)\/?$/i.test(parsed.pathname)) return null;
     const knownAtsPath = (parsed.hostname.endsWith("jobs.lever.co") || parsed.hostname.endsWith("jobs.ashbyhq.com")) && /^\/[^/]+\/[^/?#]{4,}/.test(parsed.pathname);
-    const hasIndividualPath = /\/(?:jobs?|vagas?|vacancies|positions|opportunities)\/(?:view\/)?[^/?#]{4,}/i.test(parsed.pathname) || knownAtsPath;
+    const infoJobsPath = /(^|\.)infojobs\.com\.br$/.test(parsed.hostname) && /^\/vaga-de-.+__\d+\.aspx$/i.test(parsed.pathname);
+    const hasIndividualPath = /\/(?:jobs?|vagas?|vacancies|positions|opportunities)\/(?:view\/)?[^/?#]{4,}/i.test(parsed.pathname) || knownAtsPath || infoJobsPath;
     const hasId = [...parsed.searchParams.keys()].some((key) => TRACKING_KEYS.has(key.toLowerCase()));
     if (!hasIndividualPath && !hasId) return null;
     const clean = new URL(parsed.origin + parsed.pathname.replace(/\/$/, ""));

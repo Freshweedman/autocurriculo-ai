@@ -81,9 +81,7 @@ export default function ConfiguracoesPage() {
   const [cargo, setCargo]               = useState("");
   const [novoCargo, setNovoCargo]       = useState("");
   const [cidade, setCidade]             = useState("");
-  const [limiteDiario, setLimiteDiario] = useState(5);
   const [botAtivo, setBotAtivo]         = useState(false);
-  const [directSubmission, setDirectSubmission] = useState(false);
   const [countryCode, setCountryCode] = useState("BR");
   const [stateCode, setStateCode] = useState("");
   const [remoteOnly, setRemoteOnly] = useState(false);
@@ -111,9 +109,7 @@ export default function ConfiguracoesPage() {
 
     setCargo(Array.isArray(data.cargos) ? data.cargos.join(", ") : data.cargo || "");
     setCidade(data.cidade || "");
-    setLimiteDiario(data.limite_diario || 5);
     setBotAtivo(data.bot_ativo ?? false);
-    setDirectSubmission(data.direct_submission_enabled ?? false);
     setCountryCode(data.discovery_preferences?.country_code || "BR");
     setStateCode(data.discovery_preferences?.state || "");
     setRemoteOnly(data.discovery_preferences?.remote_only ?? false);
@@ -160,7 +156,7 @@ export default function ConfiguracoesPage() {
     const response = await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cargo, cidade, limite_diario: limiteDiario, bot_ativo: botAtivo, direct_submission_enabled: directSubmission, applicant: { full_name: fullName, phone, summary: professionalSummary }, discovery_preferences: { country_code: countryCode, city: cidade, state: stateCode, remote_only: remoteOnly, international_only: internationalOnly } }),
+      body: JSON.stringify({ cargo, cidade, bot_ativo: botAtivo, applicant: { full_name: fullName, phone, summary: professionalSummary }, discovery_preferences: { country_code: countryCode, city: cidade, state: stateCode, remote_only: remoteOnly, international_only: internationalOnly } }),
     });
     if (!response.ok) { setConnectionError("Não foi possível salvar as preferências."); setLoading(false); return; }
     setSalvo(true);
@@ -213,7 +209,6 @@ export default function ConfiguracoesPage() {
 
   if (pageLoading) return <div className="text-muted">Carregando...</div>;
 
-  const jobPlatforms      = PLATFORMS.filter((p) => p.tipo === "emprego");
   const freelancerPlatforms = PLATFORMS.filter((p) => p.tipo === "freelancer");
   const connectedCount    = PLATFORMS.filter((p) => plataformas[p.key].configurado).length;
 
@@ -278,25 +273,14 @@ export default function ConfiguracoesPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}><div><div style={{ fontWeight: 500, fontSize: 14 }}>Aceitar vagas internacionais</div><div className="text-muted" style={{ fontSize: 12 }}>Desativado por padrão. Vagas globais só aparecem quando forem elegíveis.</div></div><Toggle value={internationalOnly} onChange={setInternationalOnly} /></div>
           </div>
 
-          <label style={labelStyle}>Limite diario de envios por plataforma</label>
-          <select value={limiteDiario} onChange={(e) => setLimiteDiario(Number(e.target.value))}
-            style={{ marginBottom: 20 }}>
-            {[10, 20, 50, 100, 150, 200].map((n) => (
-              <option key={n} value={n}>{n} curriculos/dia</option>
-            ))}
-          </select>
+
 
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <div>
-              <div style={{ fontWeight: 500, fontSize: 14 }}>Descoberta assistida</div>
-              <div className="text-muted" style={{ fontSize: 13 }}>Consulta fontes configuradas em dias úteis. O envio final exige sua revisão.</div>
+              <div style={{ fontWeight: 500, fontSize: 14 }}>Busca automática em dias úteis</div>
+              <div className="text-muted" style={{ fontSize: 13 }}>Novas vagas aparecem no painel para você se candidatar.</div>
             </div>
             <Toggle value={botAtivo} onChange={setBotAtivo} />
-          </div>
-
-          <div className="direct-submission-setting">
-            <div><div style={{ fontWeight: 650, fontSize: 14 }}>Permitir envio direto nas conexões habilitadas</div><div className="text-muted" style={{ fontSize: 12 }}>Só vale quando você inicia manualmente a automação. O agendamento nunca envia candidaturas.</div></div>
-            <Toggle value={directSubmission} onChange={setDirectSubmission} />
           </div>
 
           <button className="btn-primary" onClick={handleSave} disabled={loading}
@@ -314,9 +298,7 @@ export default function ConfiguracoesPage() {
         <div className="card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
             <h3 style={{ fontSize: 16, fontWeight: 600 }}>Fontes e plataformas de oportunidades</h3>
-            <span className="badge badge-success" style={{ fontSize: 11 }}>
-              {jobPlatforms.filter((p) => plataformas[p.key].configurado).length}/{jobPlatforms.length} conectadas
-            </span>
+
           </div>
           <p className="text-muted" style={{ fontSize: 13, marginBottom: 20 }}>
             {PUBLIC_SOURCES.length} atalhos de busca. Eles abrem vagas reais; candidatura e confirmação continuam no site de origem.
@@ -340,17 +322,7 @@ export default function ConfiguracoesPage() {
               </div>
             ))}
 
-            {/* Plataformas com login */}
-            {jobPlatforms.map((p) => (
-              <PlatformCard
-                key={p.key}
-                label={p}
-                cred={plataformas[p.key]}
-                onSave={() => handleSavePlatform(p.key)}
-                onRemove={() => handleRemovePlatform(p.key)}
-                onChange={(patch) => setPlatform(p.key, patch)}
-              />
-            ))}
+
           </div>
         </div>
 
@@ -386,7 +358,7 @@ export default function ConfiguracoesPage() {
           background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.2)",
         }}>
           <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>
-            {connectedCount} de {PLATFORMS.length} plataformas conectadas
+            {connectedCount} conexão(ões) cadastrada(s)
           </div>
           <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.6 }}>
             Suas conexões são isoladas por conta e o segredo é cifrado antes de ser armazenado. Revise sempre a oportunidade e qualquer etapa de confirmação antes de concluir uma candidatura.

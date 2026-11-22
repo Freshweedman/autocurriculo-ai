@@ -1,8 +1,6 @@
 # AutoCurriculo AI
 
-Para o fluxo de candidaturas pelo START no Windows, veja [instalação e uso do runner local](automation-runner/CANDIDATURAS.md).
-
-Painel de busca e acompanhamento de candidaturas, com runner local em Node.js e Playwright.
+Painel web para encontrar vagas e preparar candidaturas pelo celular. A busca roda no servidor e pode ser agendada para dias úteis. Na página de vagas, baixe seu PDF, abra o portal e registre o envio após se candidatar.
 
 ---
 
@@ -23,7 +21,7 @@ autocurriculo-ai/
 │   ├── components/              # Componentes reutilizaveis
 │   └── lib/supabase/            # Clientes Supabase
 │
-├── bot-engine/                   # Motor Playwright e runner local em local/
+├── bot-engine/                   # Busca de vagas no servidor
 │   ├── bot.js                    # Entry point
 │   ├── platforms/               # Integracoes por plataforma
 │   │   ├── indeed.js
@@ -43,8 +41,8 @@ autocurriculo-ai/
 ## Funcionalidades
 
 - **Dashboard Web** - Upload curriculo, configurar cargo/cidade, limite diario
-- **Runner local** - Sessão persistente no Chrome, busca de vagas e fila controlada pelo START/STOP
-- **Candidaturas** - Formulários reconhecidos, currículo PDF e confirmação registrada quando o portal comprova o envio
+- **Busca automática** - Busca por cargo e localização em dias úteis.
+- **Candidatura assistida** - PDF privado, link do portal e registro do envio.
 - **Google Scraper** - Coleta empresas, telefones, emails, sites
 - **Historico** - Acompanha candidaturas e leads em tempo real
 - **100% Gratis** - GitHub Actions ilimitado (repos publicos)
@@ -68,9 +66,9 @@ autocurriculo-ai/
 3. Configure as variaveis de ambiente (`.env.example` como referencia)
 4. Deploy
 
-### 3. Runner local de candidaturas
+### 3. Busca de vagas no servidor
 
-Aplique as migrations até `012_local_runner.sql` e siga o [guia do runner para Windows](automation-runner/CANDIDATURAS.md).
+Configure os secrets de Supabase, GitHub Actions e o webhook do projeto. O workflow `bot.yml` atende buscas solicitadas no painel e agendamentos em dias úteis. Consulte `.env.example` para os nomes das variáveis.
 
 ---
 

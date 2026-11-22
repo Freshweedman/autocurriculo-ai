@@ -1,8 +1,9 @@
 "use client";
 
 import { supabase } from "@/lib/supabase/client";
-import { BriefcaseBusiness, ExternalLink, FileText, LayoutGrid, List, RefreshCw, Search, Send, X } from "lucide-react";
+import { BriefcaseBusiness, ExternalLink, FileText, LayoutGrid, List, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 
 interface Application {
   id: string;
@@ -29,6 +30,7 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
   desistencia:    { label: "Desistência",    color: "#a8bacb", bg: "rgba(168,186,203,0.1)" },
   enviado:       { label: "Enviado",        color: "#30D158", bg: "rgba(48,209,88,0.1)" },
   confirmed:     { label: "Confirmado",     color: "#5eead4", bg: "rgba(94,234,212,0.1)" },
+  submitted_manual: { label: "Envio informado", color: "#7dd3fc", bg: "rgba(125,211,252,0.1)" },
   pending_confirmation: { label: "Pendente de confirmação", color: "#fbbf77", bg: "rgba(251,191,119,0.1)" },
   falhou:        { label: "Falhou",         color: "#FF6961", bg: "rgba(255,69,58,0.1)" },
   pendente:      { label: "Pendente",       color: "#FF9F0A", bg: "rgba(255,159,10,0.1)" },
@@ -56,7 +58,6 @@ export default function CandidaturasPage() {
   const [filtroPlatforma, setFiltroPlatforma] = useState("todas");
   const [selected, setSelected] = useState<Application | null>(null);
   const [cvUrl, setCvUrl] = useState<string | null>(null);
-  const [botRunning, setBotRunning] = useState(false);
   const [botMsg, setBotMsg] = useState<string | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
   const [view, setView] = useState<"list" | "kanban">("kanban");
@@ -86,25 +87,6 @@ export default function CandidaturasPage() {
     return () => window.clearTimeout(task);
   }, []);
 
-  const runBot = async () => {
-    const confirmed = window.confirm("A busca consulta fontes compatíveis com suas preferências. Resultados e etapas aparecerão na Central de automação. Deseja continuar?");
-    if (!confirmed) return;
-    setBotRunning(true);
-    setBotMsg(null);
-    try {
-      const r = await fetch("/api/run-bot", { method: "POST" });
-      const d = await r.json();
-      if (r.ok) {
-        setBotMsg(d.message || "Bot iniciado. Aguarde alguns minutos para ver resultados.");
-        window.setTimeout(() => { void loadCandidaturas(); }, 10_000);
-      } else {
-        setBotMsg(d.error || "Erro ao iniciar o envio.");
-      }
-    } catch {
-      setBotMsg("Erro de conexão ao iniciar o envio.");
-    }
-    setBotRunning(false);
-  };
 
   async function updateStatus(status: string) {
     if (!selected || status === selected.status) return;
@@ -167,7 +149,7 @@ export default function CandidaturasPage() {
         <div>
           <h1 style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.03em" }}>Candidaturas</h1>
           <p style={{ color: "var(--text-secondary)", marginTop: 4, fontSize: 14 }}>
-            {enviadas.toLocaleString("pt-BR")} enviadas · {totalReal.toLocaleString("pt-BR")} candidaturas úteis · {hoje} hoje
+            {enviadas.toLocaleString("pt-BR")} confirmadas · {totalReal.toLocaleString("pt-BR")} candidaturas úteis · {hoje} hoje
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -180,17 +162,7 @@ export default function CandidaturasPage() {
           <button onClick={loadCandidaturas} className="btn-ghost" style={{ padding: "8px 14px", fontSize: 13 }}>
             <RefreshCw size={14} aria-hidden="true" /> Atualizar
           </button>
-          <button
-            onClick={runBot}
-            disabled={botRunning}
-            className="btn-primary"
-            style={{ padding: "8px 18px", fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}
-          >
-            {botRunning
-              ? <><span className="animate-spin" style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%" }} /> Iniciando...</>
-              : <><Send size={15} aria-hidden="true" /> Buscar oportunidades</>
-            }
-          </button>
+          <Link href="/dashboard/automacao" className="btn-primary"><Search size={15} aria-hidden="true" /> Buscar vagas</Link>
         </div>
       </div>
 
@@ -254,6 +226,7 @@ export default function CandidaturasPage() {
           <option value="todos">Todos os status</option>
           <option value="enviado">Enviado</option>
           <option value="confirmed">Confirmado</option>
+          <option value="submitted_manual">Envio informado</option>
           <option value="pending_confirmation">Pendente de confirmação</option>
           <option value="duplicado">Duplicado</option>
           <option value="falhou">Falhou</option>

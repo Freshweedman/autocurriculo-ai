@@ -1,12 +1,5 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-export const runnerColumns = "enabled,last_seen_at,platform_limits,screening_answers,resume_id";
-
-export function digest(token: string) {
-  return createHash("sha256").update(token).digest("hex");
-}
 
 export function runnerError(error: string, status = 400) {
   return NextResponse.json({ error }, { status });
