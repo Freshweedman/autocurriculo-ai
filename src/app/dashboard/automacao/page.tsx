@@ -3,6 +3,7 @@
 import { CalendarDays, Search } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { PublicApplicationQueue } from "./PublicApplicationQueue";
 
 type Snapshot = {
   profile: { cargo: string | null; cidade: string | null; bot_ativo: boolean } | null;
@@ -85,6 +86,7 @@ export default function AutomacaoPage() {
         </div>
         <p>{schedule ? "Ativada para dias úteis. As vagas aparecem na sua conta mesmo com o navegador fechado." : "Ative para receber novas vagas em dias úteis."}</p>
       </section>
+      <PublicApplicationQueue />
       <section className="automation-layout">
         <div className="automation-panel">
           <div className="panel-heading"><h2>Última busca</h2></div>

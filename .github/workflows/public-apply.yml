@@ -1,0 +1,41 @@
+name: Candidaturas públicas aprovadas
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        required: true
+        type: string
+      lane:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-apply-${{ inputs.lane }}
+  cancel-in-progress: false
+
+jobs:
+  public-forms:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - run: npm ci
+        working-directory: bot-engine
+      - run: npx playwright install chromium --with-deps
+        working-directory: bot-engine
+      - name: Processar formulários aprovados
+        working-directory: bot-engine
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PUBLIC_APPLICATION_WORKER_SECRET: ${{ secrets.PUBLIC_APPLICATION_WORKER_SECRET }}
+          PUBLIC_APPLICATION_RUN_ID: ${{ inputs.run_id }}
+          PUBLIC_APPLICATION_LANE: ${{ inputs.lane }}
+        run: node public-application-worker.js

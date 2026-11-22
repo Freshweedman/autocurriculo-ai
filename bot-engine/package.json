@@ -5,7 +5,8 @@
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
-    "test:controlled-application": "node tests/controlled-application.test.js"
+    "test:controlled-application": "node tests/controlled-application.test.js",
+    "test:public-form": "node tests/public-form.test.js"
   },
   "dependencies": {
     "playwright": "^1.43.0",

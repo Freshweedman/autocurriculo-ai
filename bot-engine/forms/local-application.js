@@ -2,9 +2,9 @@ const { normalize } = require("../platforms/publicboards");
 const { attachResume } = require("./application-form");
 const { randomDelay } = require("../utils/delays");
 
-const FINAL = /^(?:enviar candidatura|submit application|finalizar candidatura|concluir candidatura|enviar sua candidatura)$/i;
+const FINAL = /^(?:enviar candidatura|submit application|finalizar candidatura|concluir candidatura|enviar sua candidatura|send application|enviar inscrição|submit)$/i;
 const NEXT = /^(?:continuar|continue|próxima|next|avançar|revisar candidatura|review application)$/i;
-const CONFIRMATION = /^\s*(?:(?:sua )?candidatura (?:foi )?(?:enviada|recebida|confirmada)(?: com sucesso)?|(?:your )?application (?:was |has been )?(?:sent|submitted|received)|obrigad[oa] (?:por se candidatar|pela sua candidatura)|thank you for applying)[\s!.]*$/i;
+const CONFIRMATION = /^\s*(?:(?:sua )?candidatura (?:foi )?(?:enviada|recebida|confirmada)(?: com sucesso)?|(?:your )?application (?:was |has been )?(?:sent|submitted|received)(?: successfully)?|application successfully submitted|obrigad[oa] (?:por se candidatar|pela sua candidatura)|thank you for applying)[\s!.]*$/i;
 
 async function proofText(page) {
   return (await page.locator("h1,h2,h3,[role=status],[role=alert],p").allTextContents())
@@ -15,6 +15,8 @@ function answerFor(field, profile, answers) {
   const label = normalize(field.label);
   const supplied = Object.entries(answers || {}).find(([question]) => normalize(question) === label);
   if (supplied) return supplied[1];
+  if (/^(first name|given name|primeiro nome)$/.test(label) || field.auto === "given-name") return profile.full_name?.trim().split(/\s+/)[0];
+  if (/^(last name|family name|sobrenome)$/.test(label) || field.auto === "family-name") return profile.full_name?.trim().split(/\s+/).slice(1).join(" ");
   if (/^(nome completo|full name)$/.test(label) || field.auto === "name") return profile.full_name;
   if (/^(e mail|email|email address|endereco de email)$/.test(label) || field.auto === "email" || field.type === "email") return profile.email;
   if (/^(telefone|celular|phone number|telefone celular)$/.test(label) || field.auto === "tel" || field.type === "tel") return profile.phone;
@@ -64,7 +66,7 @@ async function prepareFields(page, profile, answers) {
       await field.fill(answer);
       continue;
     }
-    if (info.required || !/opcional|optional/i.test(label)) pending.add(label);
+    if (info.required) pending.add(label);
   }
   const unanswered = await page.locator('input[type="radio"]:required').evaluateAll((elements) =>
     elements.filter((element) => element.getClientRects().length && !Array.from(element.form?.elements || document.querySelectorAll("input")).some((other) => other.type === "radio" && other.name === element.name && other.checked))
