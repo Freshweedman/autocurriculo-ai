@@ -81,6 +81,7 @@ export default function ConfiguracoesPage() {
   const [cargo, setCargo]               = useState("");
   const [novoCargo, setNovoCargo]       = useState("");
   const [cidade, setCidade]             = useState("");
+  const [seniorityLevel, setSeniorityLevel] = useState("pleno");
   const [botAtivo, setBotAtivo]         = useState(false);
   const [countryCode, setCountryCode] = useState("BR");
   const [stateCode, setStateCode] = useState("");
@@ -109,6 +110,7 @@ export default function ConfiguracoesPage() {
 
     setCargo(Array.isArray(data.cargos) ? data.cargos.join(", ") : data.cargo || "");
     setCidade(data.cidade || "");
+    setSeniorityLevel(data.seniority_level || "pleno");
     setBotAtivo(data.bot_ativo ?? false);
     setCountryCode(data.discovery_preferences?.country_code || "BR");
     setStateCode(data.discovery_preferences?.state || "");
@@ -156,7 +158,7 @@ export default function ConfiguracoesPage() {
     const response = await fetch("/api/config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cargo, cidade, bot_ativo: botAtivo, applicant: { full_name: fullName, phone, summary: professionalSummary }, discovery_preferences: { country_code: countryCode, city: cidade, state: stateCode, remote_only: remoteOnly, international_only: internationalOnly } }),
+      body: JSON.stringify({ cargo, cidade, seniority_level: seniorityLevel, bot_ativo: botAtivo, applicant: { full_name: fullName, phone, summary: professionalSummary }, discovery_preferences: { country_code: countryCode, city: cidade, state: stateCode, remote_only: remoteOnly, international_only: internationalOnly } }),
     });
     if (!response.ok) { setConnectionError("Não foi possível salvar as preferências."); setLoading(false); return; }
     setSalvo(true);
@@ -258,6 +260,11 @@ export default function ConfiguracoesPage() {
           <label style={labelStyle}>Cidade / Regiao</label>
           <input value={cidade} onChange={(e) => setCidade(e.target.value)}
             placeholder="Ex: Sao Paulo - SP (deixe vazio para remoto)" style={{ marginBottom: 16 }} />
+
+          <label style={labelStyle}>Nível profissional</label>
+          <select value={seniorityLevel} onChange={(e) => setSeniorityLevel(e.target.value)} style={{ marginBottom: 16 }}>
+            <option value="junior">Júnior</option><option value="pleno">Pleno</option><option value="senior">Sênior</option>
+          </select>
 
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 120px", gap: 10, marginBottom: 16 }}>
             <label style={{ ...labelStyle, marginBottom: 0 }}>País

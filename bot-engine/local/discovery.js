@@ -14,6 +14,7 @@ const METRO = [
 const STATE = /\b(?:rs|rio grande do sul)\b/;
 const BRAZIL = /\b(?:br|brasil|brazil|latam|latin america|america latina|rs|sc|pr|sp|rj|mg|es|ba|pe|ce|df|go|mt|ms|am|pa|ma|pb|pi|rn|se|al|ac|ro|rr|to|ap)\b/;
 const LEVELS = { jr: /\b(?:jr|junior|i)\b/, pl: /\b(?:pl|pleno|ii)\b/, sr: /\b(?:sr|senior|iii)\b/ };
+const JUNIOR_TERMS = ["assistente", "auxiliar", "inspetor", "tecnico de qualidade", "analista de qualidade junior", "analista de testes junior", "qa junior", "estagio", "trainee", "controle de qualidade", "garantia da qualidade", "laboratorio"];
 
 function expand(profile = {}, applicant = {}, search = {}) {
   const terms = String(profile.cargo || "analista de qualidade").split(/[,;\n]/).map((term) => term.trim()).filter(Boolean);
@@ -27,6 +28,7 @@ function expand(profile = {}, applicant = {}, search = {}) {
   const state = applicant.state || cityValue.split(/,|\s+-\s+/)[1]?.trim() || (isMetro ? "RS" : "");
   const country = applicant.country_code || "BR";
   const remoteOnly = Boolean(search.remote_only);
+  const seniority = profile.seniority_level || search.seniority_level || "pleno";
   const modes = (search.work_modes || []).map(normalize);
   const stateName = normalize(state);
   const local = remoteOnly ? [] : [
@@ -34,7 +36,7 @@ function expand(profile = {}, applicant = {}, search = {}) {
     ...(isMetro ? [{ name: "Região Metropolitana de Porto Alegre", locations: ["Canoas", "São Leopoldo", "Gravataí"] }] : []),
     ...(state ? [{ name: state, locations: [state] }] : []),
   ];
-  return { terms, base, levels, quality, synonyms, city, stateName, isMetro, country, remoteOnly, modes,
+  return { terms, base, levels, seniority, quality, synonyms, city, stateName, isMetro, country, remoteOnly, modes,
     stages: [...local, { name: "Remoto e híbrido", locations: [country === "BR" ? "Brasil" : country] }] };
 }
 
@@ -55,7 +57,9 @@ function rank(job, filters, stage) {
   const brazil = BRAZIL.test(location) || metro || city;
   const last = stage.name === "Remoto e híbrido";
   const qualifiers = Object.keys(LEVELS).filter((key) => LEVELS[key].test(title));
-  const levelMatches = !filters.levels.length || !qualifiers.length || filters.levels.some((level) => qualifiers.includes(level));
+  const seniorityBlocked = filters.seniority === "junior" && (/(?:\bsr\b|senior|s[eê]nior|pleno|\bii\b|\biii\b|especialista|lead)/i.test(title) || /(?:3|4|5|6|7|8|9|10)\s*\+?\s*anos?/i.test(job.description || ""));
+  const juniorMatch = filters.seniority !== "junior" || JUNIOR_TERMS.some((term) => normalize(title).includes(term));
+  const levelMatches = !seniorityBlocked && juniorMatch && (!filters.levels.length || !qualifiers.length || filters.levels.some((level) => qualifiers.includes(level)));
   const allowedMode = !filters.modes.length || filters.modes.some((mode) =>
     remote && /remot/.test(mode) || hybrid && /hybrid|hibrid/.test(mode) || !remote && !hybrid && /on.?site|presencial/.test(mode));
   const allowedLocation = filters.country === "BR"

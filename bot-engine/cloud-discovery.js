@@ -86,7 +86,7 @@ async function main() {
   const [request] = runId ? await read("automation_runs", { id: "eq." + runId, status: "eq.queued", trigger_type: "eq.manual", select: "user_id", limit: 1 }) : [];
   if (runId && !request) throw Error("Busca solicitada não está mais na fila.");
   const criteria = request ? { user_id: "eq." + request.user_id } : { bot_ativo: "is.true" };
-  const profiles = await read("profiles", { ...criteria, select: "user_id,cargo,cidade", "cargo": "not.is.null" });
+  const profiles = await read("profiles", { ...criteria, select: "user_id,cargo,cidade,seniority_level", "cargo": "not.is.null" });
   const eligible = profiles.filter((profile) => profile.cargo?.trim());
   if (!eligible.length) return;
   const browser = await chromium.launch({ headless: true });
