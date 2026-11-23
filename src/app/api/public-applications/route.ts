@@ -20,7 +20,7 @@ export async function GET(request: Request) {
     return signed.data ? Response.redirect(signed.data.signedUrl) : runnerError("Prova indisponível.", 503);
   }
   const [queue, runs, telegram, answers] = await Promise.all([
-    admin.from("public_application_queue").select("id,title,company,source,url,status,reason,proof_path,updated_at").eq("user_id", user.id)
+    admin.from("public_application_queue").select("id,opportunity_id,title,company,source,url,status,reason,proof_path,updated_at").eq("user_id", user.id)
       .order("updated_at", { ascending: false }).limit(60),
     admin.from("automation_runs").select("id,status,created_at,summary,error_message").eq("user_id", user.id)
       .order("created_at", { ascending: false }).limit(20),
@@ -68,6 +68,18 @@ export async function POST(request: Request) {
     const { data, error } = await admin.rpc("public_apply_approve", { p_user: user.id, p_jobs: [...new Set(body.ids)] });
     if (error || !data) return runnerError("Selecione um PDF padrão e vagas verificadas recentemente.", 409);
     return Response.json({ message: `${data} vaga(s) aprovada(s) por 24 horas.` });
+  }
+  if (body.action === "manual_sent") {
+    if (!isUuid(body.id)) return runnerError("Vaga inválida.");
+    const { data, error } = await admin.from("public_application_queue").select("id,opportunity_id").eq("id", body.id).eq("user_id", user.id).in("status", ["needs_action", "unconfirmed"]).maybeSingle();
+    if (error || !data?.opportunity_id) return runnerError("Vaga indisponível.", 404);
+    const { data: resume } = await admin.from("resumes").select("id").eq("user_id", user.id).eq("is_default", true).maybeSingle();
+    const { data: opportunity } = await admin.from("opportunities").select("id,title,company,source,canonical_url").eq("id", data.opportunity_id).maybeSingle();
+    if (!opportunity) return runnerError("Vaga indisponível.", 404);
+    const { error: insertError } = await admin.from("applications").insert({ user_id: user.id, opportunity_id: opportunity.id, resume_id: resume?.id || null, vaga: opportunity.title, empresa: opportunity.company, plataforma: opportunity.source, vaga_url: opportunity.canonical_url, status: "submitted_manual", sent_at: new Date().toISOString(), notes: "Envio informado pela pessoa candidata." });
+    if (insertError && insertError.code !== "23505") return runnerError("Não foi possível registrar o envio.", 503);
+    await admin.from("public_application_queue").update({ status: "needs_action", reason: "manual_sent", updated_at: new Date().toISOString() }).eq("id", data.id).eq("user_id", user.id);
+    return Response.json({ message: "Marcado como já enviado. Não conta como envio confirmado automaticamente." });
   }
   if (body.action !== "inspect" && body.action !== "apply") return runnerError("Ação inválida.");
 
