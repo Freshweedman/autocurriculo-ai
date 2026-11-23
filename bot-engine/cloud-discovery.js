@@ -1,4 +1,5 @@
 const { chromium } = require("playwright");
+const crypto = require("crypto");
 const { expand, rank } = require("./local/discovery");
 const { sources } = require("./local/platforms");
 
@@ -21,6 +22,7 @@ const read = (table, params) => json(`${database}/rest/v1/${table}?${new URLSear
 const report = (route, body) => json(base + "/api/webhook/" + route, {
   method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey, ...body }),
 });
+const classifyFlow = (source) => ["Greenhouse", "Lever", "Ashby", "Workable", "Recruitee"].includes(source) ? "public_form" : ["InfoJobs", "Gupy", "Catho", "Vagas.com"].includes(source) ? "login_required" : "assisted";
 
 async function discover(browser, profile) {
   const id = profile.user_id;
@@ -68,6 +70,10 @@ async function discover(browser, profile) {
     if (!successfulSources) throw Error("Nenhuma fonte respondeu à consulta.");
     const opportunities = [...jobs.values()].sort((a, b) => b.compatibility_score - a.compatibility_score).slice(0, 40);
     const result = await report("opportunities", { userId: id, runId: currentRun, opportunities });
+    if (currentRun) {
+      const items = opportunities.map((item) => ({ run_id: currentRun, user_id: id, source: item.plataforma, url_hash: crypto.createHash("sha256").update(item.vaga_url).digest("hex"), title: item.vaga, company: item.empresa, flow_type: classifyFlow(item.plataforma), compatible: true }));
+      await json(`${database}/rest/v1/search_items?on_conflict=user_id%2Curl_hash`, { method: "POST", headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(items) });
+    }
     await event("completed", `${result.linkedToUser ?? 0} vagas compatíveis disponíveis para candidatura.`, "succeeded");
   } catch (error) {
     await event("failed", `Busca interrompida. ${error.message.slice(0, 180)}`, "failed");
