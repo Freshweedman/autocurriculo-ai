@@ -8,6 +8,9 @@ export async function GET(request: Request) {
   const user = await runnerUser();
   if (!user) return runnerError("Sessão expirada.", 401);
   const admin = createAdminClient();
+  const actionsToken = process.env.ACTIONS_PUBLIC_APPLICATION_TOKEN?.trim() || "";
+  const workerSecret = process.env.ACTIONS_PUBLIC_APPLICATION_WORKER_SECRET?.trim() || "";
+  const configReason = !actionsToken ? "token ausente" : !actionsToken.startsWith("github_pat_") ? "token não é fine-grained" : workerSecret.length < 32 ? "segredo do worker ausente ou curto" : "válida";
   const requested = new URL(request.url).searchParams.get("proof");
   if (requested) {
     if (!isUuid(requested)) return runnerError("Prova inválida.");
@@ -27,7 +30,7 @@ export async function GET(request: Request) {
   if (queue.error || runs.error || telegram.error || answers.error) return runnerError("A fila de formulários ainda não está disponível.", 503);
   return NextResponse.json({
     queue: queue.data, runs: (runs.data || []).filter((run) => PUBLIC_MODES.includes(String(run.summary?.mode))).slice(0, 2), answers: answers.data?.answers || {}, linkedTelegram: Boolean(telegram.data?.chat_id),
-    telegramAvailable: Boolean(process.env.PUBLIC_TELEGRAM_BOT_USERNAME && process.env.PUBLIC_TELEGRAM_BOT_TOKEN),
+    telegramAvailable: Boolean(process.env.PUBLIC_TELEGRAM_BOT_USERNAME && process.env.PUBLIC_TELEGRAM_BOT_TOKEN), configReason,
     live: process.env.PUBLIC_APPLY_LIVE === "enabled",
   });
 }
@@ -73,7 +76,7 @@ export async function POST(request: Request) {
   const token = process.env.ACTIONS_PUBLIC_APPLICATION_TOKEN?.trim();
   const secret = process.env.ACTIONS_PUBLIC_APPLICATION_WORKER_SECRET?.trim();
   if (!token?.startsWith("github_pat_") || !secret || secret.length < 32)
-    return runnerError("O serviço de formulários ainda está sem configuração de acesso.", 503);
+    return runnerError("Configuração inválida: token fine-grained ou segredo do worker ausente.", 503);
   if (!live) {
     const sync = await admin.rpc("public_apply_sync", { p_user: user.id });
     if (sync.error) return runnerError("Não foi possível atualizar a fila de vagas.", 503);

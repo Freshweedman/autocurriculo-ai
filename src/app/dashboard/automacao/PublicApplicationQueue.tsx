@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 type Job = { id: string; title: string; company: string | null; source: string; url: string; status: string; reason: string | null; updated_at: string };
-type Data = { queue: Job[]; linkedTelegram: boolean; telegramAvailable: boolean; live: boolean };
+type Data = { queue: Job[]; linkedTelegram: boolean; telegramAvailable: boolean; live: boolean; configReason?: string };
 const labels: Record<string, string> = { queued: "Aguardando verificação", checking: "Em verificação", ready: "Pronta para aprovação", approved: "Aprovada", applying: "Enviando", confirmed: "Confirmada", needs_action: "Precisa de você", unconfirmed: "Sem confirmação" };
 const reasons: Record<string, string> = { unsupported: "Use o portal", captcha: "Verificação humana", authentication: "Login necessário", required_answers: "Pergunta pendente", unknown_form: "Formulário fora do padrão", reservation_denied: "Limite ou aprovação expirou", provider_uncertain: "Confira antes de repetir", interrupted: "Execução interrompida", form_observed: "Formulário público encontrado" };
 
@@ -21,6 +21,7 @@ export function PublicApplicationQueue() {
     <p>Somente formulários públicos sem login. Você aprova cada lote antes do envio. Confirmações incluem prova privada.</p>
     {note && <p className="notice" role="status">{note}</p>}
     {data ? <>
+      {data.configReason && data.configReason !== "válida" && <p className="notice" role="alert">Configuração do serviço: {data.configReason}. O envio permanece desligado.</p>}
       <p><strong>{ready.length}</strong> prontas · <strong>{needs.length}</strong> precisam de você · <strong>{data.queue.filter((job) => job.status === "confirmed").length}</strong> confirmadas</p>
       {ready.length > 0 && <div className="run-list">{ready.map((job) => <label key={job.id}><input type="checkbox" checked={selected.includes(job.id)} disabled={busy || (!selected.includes(job.id) && selected.length >= 10)} onChange={() => setSelected((ids) => ids.includes(job.id) ? ids.filter((id) => id !== job.id) : [...ids, job.id])} /> <strong>{job.title}</strong> <small>{job.company || job.source}</small></label>)}</div>}
       {selected.length > 0 && <div className="page-actions"><button className="btn-outline" disabled={busy} onClick={() => void command("approve", { ids: selected })}>Aprovar {selected.length} por 24 horas</button>{data.live && <button className="btn-primary" disabled={busy} onClick={() => void command("apply")}>Enviar lote aprovado</button>}</div>}
