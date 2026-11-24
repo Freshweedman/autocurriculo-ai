@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canonicalJobUrl } from "@/lib/job-url";
-import webpush from "web-push";
+import * as webpush from "web-push";
 
 type DiscoveredOpportunity = { empresa?: string; vaga?: string; vaga_url?: string; local?: string; plataforma?: string; compatibility_score?: number; match_reasons?: string[] };
 
