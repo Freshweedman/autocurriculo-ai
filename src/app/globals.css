@@ -83,10 +83,15 @@ button {
   font-family: inherit;
   letter-spacing: -0.01em;
 }
+button, .btn-primary, .btn-outline, .btn-secondary, .btn-ghost { min-height: 40px; line-height: 1.15; white-space: nowrap; }
 
 .btn-primary {
   background: var(--accent);
-  color: white;
+  color: #07121c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
 }
 .btn-primary:hover { background: var(--accent-hover); transform: translateY(-0.5px); box-shadow: 0 4px 16px rgba(10,132,255,0.3); }
 .btn-primary:active { transform: translateY(0); box-shadow: none; }

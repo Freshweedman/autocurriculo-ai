@@ -65,7 +65,7 @@ export default function OportunidadesPage() {
   const filtered = rows.filter(({ opportunity }) => `${opportunity.title} ${opportunity.company || ""} ${opportunity.location_text || ""}`.toLowerCase().includes(filter));
 
   return <div className="resource-page">
-    <header className="page-heading"><div><h1>Vagas para você</h1><p>Baixe seu PDF, envie pelo portal da vaga e acompanhe pelo painel.</p></div>
+    <header className="page-heading"><div><h1>Vagas para você</h1><p>Abra a vaga, candidate-se no portal e marque quando terminar.</p></div>
       <div className="page-actions"><Link className="btn-outline" href="/dashboard/automacao">Buscar vagas</Link><Link className="btn-outline" href="/dashboard/candidaturas">Ver meus envios</Link></div>
     </header>
     <div className="opportunity-filters"><label><Search size={16} /><input aria-label="Filtrar vagas" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cargo, empresa ou cidade" /></label></div>
