@@ -81,10 +81,10 @@ export async function POST(request: Request) {
     await admin.from("public_application_queue").update({ status: "needs_action", reason: "manual_sent", updated_at: new Date().toISOString() }).eq("id", data.id).eq("user_id", user.id);
     return Response.json({ message: "Marcado como já enviado. Não conta como envio confirmado automaticamente." });
   }
-  if (body.action !== "inspect" && body.action !== "apply") return runnerError("Ação inválida.");
+  if (body.action === "apply" || body.action === "approve") return runnerError("Envio automático está desativado nesta versão.", 409);
+  if (body.action !== "inspect") return runnerError("Ação inválida.");
 
-  const live = body.action === "apply";
-  if (live && process.env.PUBLIC_APPLY_LIVE !== "enabled") return runnerError("O envio real está desligado neste ambiente.", 409);
+  const live = false;
   const token = process.env.ACTIONS_PUBLIC_APPLICATION_TOKEN?.trim();
   const secret = process.env.ACTIONS_PUBLIC_APPLICATION_WORKER_SECRET?.trim();
   if (!token?.startsWith("github_pat_") || !secret || secret.length < 32)
@@ -92,10 +92,6 @@ export async function POST(request: Request) {
   if (!live) {
     const sync = await admin.rpc("public_apply_sync", { p_user: user.id });
     if (sync.error) return runnerError("Não foi possível atualizar a fila de vagas.", 503);
-  } else {
-    const count = await admin.from("public_application_queue").select("id", { count: "exact", head: true }).eq("user_id", user.id)
-      .eq("status", "approved").gte("approved_at", new Date(Date.now() - 86400000).toISOString());
-    if (count.error || !count.count) return runnerError("Aprove uma vaga verificada antes de enviar.", 409);
   }
   const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
   const possibleStale = await admin.from("automation_runs").select("id,summary").eq("user_id", user.id).in("status", ["queued", "running"]).lt("created_at", cutoff);
