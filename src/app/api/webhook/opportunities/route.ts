@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canonicalJobUrl } from "@/lib/job-url";
+import webpush from "web-push";
 
 type DiscoveredOpportunity = { empresa?: string; vaga?: string; vaga_url?: string; local?: string; plataforma?: string; compatibility_score?: number; match_reasons?: string[] };
 
@@ -44,8 +45,16 @@ export async function POST(request: NextRequest) {
     return opportunityId ? [{ user_id: payload.userId!, opportunity_id: opportunityId, status: "found" }] : [];
   });
   if (links.length) {
-    const { error: linkError } = await admin.from("user_opportunities").upsert(links, { onConflict: "user_id,opportunity_id", ignoreDuplicates: true });
+    const { data: newLinks, error: linkError } = await admin.from("user_opportunities").upsert(links, { onConflict: "user_id,opportunity_id", ignoreDuplicates: true }).select("opportunity_id");
     if (linkError) return NextResponse.json({ error: "Não foi possível vincular oportunidades ao usuário" }, { status: 500 });
+    if (newLinks?.length && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY && process.env.VAPID_SUBJECT) {
+      webpush.setVapidDetails(process.env.VAPID_SUBJECT, process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+      const { data: subscriptions } = await admin.from("web_push_subscriptions").select("id,endpoint,p256dh,auth").eq("user_id", payload.userId);
+      for (const subscription of subscriptions || []) {
+        try { await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: `${newLinks.length} nova(s) vaga(s)`, body: "Há novas oportunidades compatíveis para revisar.", url: "/dashboard/automacao" })); }
+        catch (error) { if ((error as { statusCode?: number }).statusCode === 404 || (error as { statusCode?: number }).statusCode === 410) await admin.from("web_push_subscriptions").delete().eq("id", subscription.id); }
+      }
+    }
   }
 
   if (payload.runId) {

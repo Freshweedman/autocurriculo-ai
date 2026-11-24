@@ -4,6 +4,7 @@ import { CalendarDays, Search } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { PublicApplicationQueue } from "./PublicApplicationQueue";
+import WebPushPrompt from "@/components/WebPushPrompt";
 
 type Snapshot = {
   profile: { cargo: string | null; cidade: string | null; bot_ativo: boolean } | null;
@@ -61,7 +62,7 @@ export default function AutomacaoPage() {
   return <div className="automation-page resource-page">
     <header className="page-heading"><div><h1>Busca de vagas</h1>
       <p>Encontre vagas compatíveis e prepare suas candidaturas pelo celular.</p></div>
-      <div className="page-actions">
+      <div className="page-actions"><WebPushPrompt />
         <button className="btn-primary" disabled={!snapshot || busy || !snapshot.profile?.cargo || Boolean(searching)} onClick={() => void command("start")}>
           <Search size={16} />{searching ? statuses[latest.status] : "Buscar vagas agora"}
         </button>
