@@ -17,7 +17,7 @@ export async function GET() {
   }
 
   const selectCols = [
-    "cargo", "cidade", "limite_diario", "bot_ativo", "direct_submission_enabled", "seniority_level", "public_apply_daily_limit",
+    "cargo", "cidade", "limite_diario", "bot_ativo", "direct_submission_enabled",
     ...PLATFORM_KEYS.map((k) => `${k}_email`),
   ].join(", ");
 
@@ -48,8 +48,6 @@ export async function GET() {
     cidade: profile?.cidade || "",
     limite_diario: profile?.limite_diario || 5,
     bot_ativo: profile?.bot_ativo || false,
-    seniority_level: profile?.seniority_level || "pleno",
-    public_apply_daily_limit: profile?.public_apply_daily_limit || 20,
     direct_submission_enabled: profile?.direct_submission_enabled || false,
     applicant: { full_name: professional?.full_name || "", phone: professional?.phone || "", summary: professional?.summary || "" },
     discovery_preferences: { country_code: professional?.country_code || "BR", city: professional?.city || profile?.cidade || "", state: professional?.state || "", remote_only: searchProfile?.remote_only || false, international_only: searchProfile?.international_only || false, work_modes: searchProfile?.work_modes || [], contract_types: searchProfile?.contract_types || [] },
@@ -74,8 +72,6 @@ export async function POST(req: NextRequest) {
   if (body.cidade       !== undefined) payload.cidade        = body.cidade;
   if (body.limite_diario !== undefined) payload.limite_diario = body.limite_diario;
   if (body.bot_ativo    !== undefined) payload.bot_ativo     = body.bot_ativo;
-  if (body.seniority_level !== undefined && ["junior", "pleno", "senior"].includes(body.seniority_level)) payload.seniority_level = body.seniority_level;
-  if (Number.isInteger(body.public_apply_daily_limit)) payload.public_apply_daily_limit = Math.min(20, Math.max(1, body.public_apply_daily_limit));
   if (body.direct_submission_enabled !== undefined) payload.direct_submission_enabled = body.direct_submission_enabled === true;
 
   // Legacy account hints remain readable during migration; plaintext passwords are rejected.
