@@ -72,7 +72,8 @@ async function discover(browser, profile) {
     const result = await report("opportunities", { userId: id, runId: currentRun, opportunities });
     if (currentRun) {
       const items = opportunities.map((item) => ({ run_id: currentRun, user_id: id, source: item.plataforma, url_hash: crypto.createHash("sha256").update(item.vaga_url).digest("hex"), title: item.vaga, company: item.empresa, flow_type: classifyFlow(item.plataforma), compatible: true }));
-      await json(`${database}/rest/v1/search_items?on_conflict=user_id%2Curl_hash`, { method: "POST", headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(items) });
+      try { await json(`${database}/rest/v1/search_items?on_conflict=user_id%2Curl_hash`, { method: "POST", headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json", Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(items) }); }
+      catch (error) { console.log("search_items indisponível; busca principal preservada."); }
     }
     await event("completed", `${result.linkedToUser ?? 0} vagas compatíveis disponíveis para candidatura.`, "succeeded");
   } catch (error) {
@@ -86,7 +87,7 @@ async function main() {
   const [request] = runId ? await read("automation_runs", { id: "eq." + runId, status: "eq.queued", trigger_type: "eq.manual", select: "user_id", limit: 1 }) : [];
   if (runId && !request) throw Error("Busca solicitada não está mais na fila.");
   const criteria = request ? { user_id: "eq." + request.user_id } : { bot_ativo: "is.true" };
-  const profiles = await read("profiles", { ...criteria, select: "user_id,cargo,cidade", "cargo": "not.is.null" });
+  const profiles = await read("profiles", { ...criteria, select: "user_id,cargo,cidade" });
   const eligible = profiles.filter((profile) => profile.cargo?.trim());
   if (!eligible.length) return;
   const browser = await chromium.launch({ headless: true });

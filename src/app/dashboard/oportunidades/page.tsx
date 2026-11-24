@@ -17,6 +17,7 @@ export default function OportunidadesPage() {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [userId, setUserId] = useState("");
 
   useEffect(() => {
     let live = true;
@@ -24,6 +25,7 @@ export default function OportunidadesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!live) return;
       if (!user) { setLoading(false); setMessage("Entre para ver suas vagas."); return; }
+      setUserId(user.id);
       const [relations, applications, pdf] = await Promise.all([
         supabase.from("user_opportunities").select("status,opportunities!inner(id,title,company,canonical_url,source,location_text)").eq("user_id", user.id).neq("status", "dismissed").order("created_at", { ascending: false }).limit(100),
         supabase.from("applications").select("vaga_url").eq("user_id", user.id).in("status", ["submitted_manual", "confirmed", "candidatado", "em_analise", "entrevista", "aprovado", "rejeitado"]),
@@ -41,7 +43,7 @@ export default function OportunidadesPage() {
   }, []);
 
   async function save(item: Row) {
-    const { error } = await supabase.from("user_opportunities").update({ status: item.saved ? "found" : "saved" }).eq("opportunity_id", item.opportunity.id);
+    const { error } = await supabase.from("user_opportunities").update({ status: item.saved ? "found" : "saved" }).eq("user_id", userId).eq("opportunity_id", item.opportunity.id);
     if (error) setMessage("A vaga não pôde ser atualizada.");
     else setRows((previous) => previous.map((row) => row.opportunity.id === item.opportunity.id ? { ...row, saved: !item.saved } : row));
   }
