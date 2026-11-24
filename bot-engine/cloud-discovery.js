@@ -8,7 +8,7 @@ const database = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const apiKey = process.env.BOT_API_KEY;
 const runId = process.env.AUTOMATION_RUN_ID;
-const activeSources = sources.filter((source) => !["Indeed", "Trabalha Brasil"].includes(source.name));
+const activeSources = sources.filter((source) => source.name !== "Indeed");
 
 async function json(url, options) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(20_000) });
@@ -86,7 +86,7 @@ async function main() {
   const [request] = runId ? await read("automation_runs", { id: "eq." + runId, status: "eq.queued", trigger_type: "eq.manual", select: "user_id", limit: 1 }) : [];
   if (runId && !request) throw Error("Busca solicitada não está mais na fila.");
   const criteria = request ? { user_id: "eq." + request.user_id } : { bot_ativo: "is.true" };
-  const profiles = await read("profiles", { ...criteria, select: "user_id,cargo,cidade,seniority_level", "cargo": "not.is.null" });
+  const profiles = await read("profiles", { ...criteria, select: "user_id,cargo,cidade", "cargo": "not.is.null" });
   const eligible = profiles.filter((profile) => profile.cargo?.trim());
   if (!eligible.length) return;
   const browser = await chromium.launch({ headless: true });
