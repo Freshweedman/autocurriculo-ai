@@ -36,7 +36,7 @@ async function discover(browser, profile) {
   try {
     const [[applicant], [preferences]] = await Promise.all([
       read("professional_profiles", { user_id: "eq." + id, select: "city,state,country_code", limit: 1 }),
-      read("search_profiles", { user_id: "eq." + id, active: "eq.true", select: "remote_only,work_modes", limit: 1 }),
+      read("search_profiles", { user_id: "eq." + id, active: "eq.true", select: "locations,remote_only,work_modes", limit: 1 }),
     ]);
     const filters = expand(profile, applicant, preferences || { remote_only: !profile.cidade });
     const terms = [...new Set([...filters.base.slice(0, 3), ...(filters.quality ? ["QA", "qualidade"] : [])])];
@@ -68,7 +68,7 @@ async function discover(browser, profile) {
       }
     } finally { await context.close(); }
     if (!successfulSources) throw Error("Nenhuma fonte respondeu à consulta.");
-    const opportunities = [...jobs.values()].sort((a, b) => b.compatibility_score - a.compatibility_score).slice(0, 40);
+    const opportunities = [...jobs.values()].sort((a, b) => b.compatibility_score - a.compatibility_score).slice(0, 100);
     const result = await report("opportunities", { userId: id, runId: currentRun, opportunities });
     if (currentRun) {
       const items = opportunities.map((item) => ({ run_id: currentRun, user_id: id, source: item.plataforma, url_hash: crypto.createHash("sha256").update(item.vaga_url).digest("hex"), title: item.vaga, company: item.empresa, flow_type: classifyFlow(item.plataforma), compatible: true }));

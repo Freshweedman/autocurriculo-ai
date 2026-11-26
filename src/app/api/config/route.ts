@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     const { error: professionalError } = await supabase.from("professional_profiles").upsert({ user_id: user.id, full_name: applicant.full_name?.trim() || null, phone: applicant.phone?.trim() || null, summary: applicant.summary?.trim() || null, country_code: preferences?.country_code || "BR", city: preferences?.city || null, state: preferences?.state || null, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
     if (professionalError) return NextResponse.json({ error: professionalError.message }, { status: 500 });
     const { data: existing } = await supabase.from("search_profiles").select("id").eq("user_id", user.id).eq("active", true).limit(1).maybeSingle();
-    const searchPayload = { user_id: user.id, name: "Busca principal", keywords: String(body.cargo || "").split(/[,;\n]/).map((item: string) => item.trim()).filter(Boolean), remote_only: preferences?.remote_only === true, international_only: preferences?.international_only === true, active: true, updated_at: new Date().toISOString() };
+    const searchPayload = { user_id: user.id, name: "Busca principal", keywords: String(body.cargo || "").split(/[,;\n]/).map((item: string) => item.trim()).filter(Boolean), locations: [preferences?.city, preferences?.state].filter(Boolean), work_modes: preferences?.remote_only ? ["remote"] : [], remote_only: preferences?.remote_only === true, international_only: preferences?.international_only === true, active: true, updated_at: new Date().toISOString() };
     const { error: searchError } = existing?.id
       ? await supabase.from("search_profiles").update(searchPayload).eq("id", existing.id)
       : await supabase.from("search_profiles").insert(searchPayload);

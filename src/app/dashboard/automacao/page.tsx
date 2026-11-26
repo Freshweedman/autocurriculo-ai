@@ -8,7 +8,6 @@ import WebPushPrompt from "@/components/WebPushPrompt";
 
 type Snapshot = {
   profile: { cargo: string | null; cidade: string | null; bot_ativo: boolean } | null;
-  resume: { name: string } | null;
   opportunityCount: number;
   runs: { id: string; status: string; trigger_type: string; created_at: string; error_message: string | null }[];
   events: { id: number; message: string; created_at: string }[];
@@ -76,7 +75,6 @@ export default function AutomacaoPage() {
       <section className="automation-summary" aria-label="Resumo da busca">
         <article><span>Perfil de busca</span><strong>{snapshot.profile?.cargo || "Cargo pendente"}</strong><small>{snapshot.profile?.cidade || "Sem cidade definida"}</small></article>
         <article><span>Vagas disponíveis</span><strong>{snapshot.opportunityCount}</strong><small><Link href="/dashboard/oportunidades">Preparar candidatura</Link></small></article>
-        <article><span>Currículo padrão</span><strong>{snapshot.resume?.name || "Pendente"}</strong><small><Link href="/dashboard/curriculos">Gerenciar currículo</Link></small></article>
       </section>
       <section className="automation-panel">
         <div className="panel-heading">

@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase/client";
 const groups = [
   { label: "Principal", items: [{ href: "/dashboard", label: "Visão geral", icon: LayoutDashboard }] },
   { label: "Minha busca", items: [{ href: "/dashboard/oportunidades", label: "Oportunidades", icon: Search }, { href: "/dashboard/candidaturas", label: "Candidaturas", icon: BriefcaseBusiness }, { href: "/dashboard/automacao", label: "Central de automação", icon: Activity }] },
-  { label: "Conta", items: [{ href: "/dashboard/curriculos", label: "Currículos", icon: FileText }, { href: "/dashboard/configuracoes", label: "Configurações", icon: Settings2 }, { href: "/dashboard/guia", label: "Como usar", icon: CircleHelp }] },
+  { label: "Conta", items: [{ href: "/dashboard/configuracoes", label: "Configurações", icon: Settings2 }, { href: "/dashboard/guia", label: "Como usar", icon: CircleHelp }] },
 ];
 
 function initialClosedGroups(): Record<string, boolean> {

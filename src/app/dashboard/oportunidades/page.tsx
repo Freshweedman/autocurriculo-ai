@@ -1,6 +1,6 @@
 "use client";
 
-import { Bookmark, Download, ExternalLink, Loader2, Search } from "lucide-react";
+import { Bookmark, ExternalLink, Loader2, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
@@ -11,7 +11,6 @@ type Row = { opportunity: Opportunity; saved: boolean };
 export default function OportunidadesPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [tracked, setTracked] = useState(new Set<string>());
-  const [resume, setResume] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState("");
   const [busy, setBusy] = useState("");
@@ -26,16 +25,14 @@ export default function OportunidadesPage() {
       if (!live) return;
       if (!user) { setLoading(false); setMessage("Entre para ver suas vagas."); return; }
       setUserId(user.id);
-      const [relations, applications, pdf] = await Promise.all([
+      const [relations, applications] = await Promise.all([
         supabase.from("user_opportunities").select("status,opportunities!inner(id,title,company,canonical_url,source,location_text)").eq("user_id", user.id).neq("status", "dismissed").order("created_at", { ascending: false }).limit(100),
         supabase.from("applications").select("vaga_url").eq("user_id", user.id).in("status", ["submitted_manual", "confirmed", "candidatado", "em_analise", "entrevista", "aprovado", "rejeitado"]),
-        supabase.from("resumes").select("name").eq("user_id", user.id).eq("is_default", true).maybeSingle(),
       ]);
       if (!live) return;
-      if (relations.error || applications.error || pdf.error) setMessage("Alguns dados da candidatura ficaram indisponíveis. Atualize a página para tentar novamente.");
+      if (relations.error || applications.error) setMessage("Alguns dados da candidatura ficaram indisponíveis. Atualize a página para tentar novamente.");
       setRows((relations.data || []).flatMap((row) => row.opportunities ? [{ opportunity: row.opportunities as unknown as Opportunity, saved: row.status === "saved" }] : []));
       setTracked(new Set((applications.data || []).map((item) => item.vaga_url).filter(Boolean)));
-      setResume(pdf.data?.name || null);
       setLoading(false);
     }
     void load();
@@ -91,9 +88,8 @@ export default function OportunidadesPage() {
             </button>
           </div>
           {open === item.id && <div className="assisted-job-steps">
-            <div><strong>1. Separe o currículo</strong>{resume ? <a className="btn-outline" href="/api/apply-assisted"><Download size={15} /> Baixar PDF</a> : <Link className="btn-outline" href="/dashboard/curriculos">Adicionar currículo</Link>}</div>
-            <div><strong>2. Envie no portal</strong><a className="btn-primary" target="_blank" rel="noreferrer" href={item.canonical_url}>Abrir vaga <ExternalLink size={15} /></a></div>
-            <div><strong>3. Registre após enviar</strong><button className="btn-outline" disabled={sent || Boolean(busy)} onClick={() => void register(item)}>{sent ? "Registrado" : busy === item.id ? "Registrando…" : "Já enviei"}</button></div>
+            <div><strong>1. Envie no portal</strong><a className="btn-primary" target="_blank" rel="noreferrer" href={item.canonical_url}>Abrir vaga <ExternalLink size={15} /></a></div>
+            <div><strong>2. Registre após enviar</strong><button className="btn-outline" disabled={sent || Boolean(busy)} onClick={() => void register(item)}>{sent ? "Registrado" : busy === item.id ? "Registrando…" : "Já enviei"}</button></div>
           </div>}
         </article>;
       })}</div>}

@@ -22,7 +22,8 @@ function expand(profile = {}, applicant = {}, search = {}) {
   const base = terms.map((term) => term.replace(/\b(?:j[uú]nior|s[eê]nior|pleno|jr|pl|sr|iii|ii|i)\b\.?/gi, "").trim()).filter(Boolean);
   const quality = base.some((term) => /\b(?:qualidade|qa|quality|testes)\b/.test(normalize(term)));
   const synonyms = [...new Set(quality ? [...base, ...QUALITY] : base)];
-  const cityValue = applicant.city || profile.cidade || "Porto Alegre";
+  const savedLocation = Array.isArray(search.locations) ? search.locations.find((value) => typeof value === "string" && value.trim()) : "";
+  const cityValue = savedLocation || applicant.city || profile.cidade || "Porto Alegre";
   const city = cityValue.split(/,|\s+-\s+/)[0].trim();
   const isMetro = METRO.includes(normalize(city));
   const state = applicant.state || cityValue.split(/,|\s+-\s+/)[1]?.trim() || (isMetro ? "RS" : "");
